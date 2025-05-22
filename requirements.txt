@@ -1,0 +1,4 @@
+# requirements.txt
+pyserial>=3.5
+pyyaml>=6.0
+google-cloud-pubsub>=2.13.0  # オプション：Google Cloud Pub/Sub出力に必要
