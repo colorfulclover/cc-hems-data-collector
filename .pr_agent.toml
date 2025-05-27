@@ -5,7 +5,7 @@ git_provider="github"
 
 [vertexai] # in .secrets.toml
 vertex_project = "cc-hems-datalake"
-vertex_location = "us-east5"
+vertex_location = "us-central1"
 
 
 [pr_reviewer] # /review #
