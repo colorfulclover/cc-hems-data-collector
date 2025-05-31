@@ -10,19 +10,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # シリアル通信設定
-SERIAL_PORT = '/dev/ttyUSB0'  # USBトングルのシリアルポート（環境に合わせて変更）
-SERIAL_RATE = 115200          # ボーレート
+SERIAL_PORT = os.environ.get('SERIAL_PORT', '/dev/ttyUSB0')  # USBトングルのシリアルポート（環境に合わせて変更）
+SERIAL_RATE = int(os.environ.get('SERIAL_RATE', 115200))          # ボーレート
 
 # Bルート認証情報（電力会社から提供される）
 B_ROUTE_ID = os.environ.get('B_ROUTE_ID', "00000000000000000000000000000000")  # 認証ID
 B_ROUTE_PASSWORD = os.environ.get('B_ROUTE_PASSWORD', "00000000000000000000000000000000")  # パスワード
-
-# スマートメーターの情報
-METER_CHANNEL = "33"          # 使用するチャンネル（環境に合わせて変更）
-METER_PANID = "0000"          # PANIDネットワーク識別子（環境に合わせて変更）
-
-# スマートメーターIPv6アドレス（実際のアドレスに変更）
-METER_IPV6 = "FE80:0000:0000:0000:021D:1291:0000:0574"
 
 # データファイル
 DEFAULT_DATA_FILE = "hems_data.dat"
