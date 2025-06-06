@@ -1,4 +1,10 @@
 # src/serial_client.py
+"""スマートメーターとのシリアル通信を処理するクライアント。
+
+Wi-SUNモジュール(BP35A1)を介してスマートメーターと通信し、
+PANAセッションの確立、ECHONET Liteコマンドの送受信、
+および電力データの取得を行います。
+"""
 import serial
 import time
 import re
@@ -20,7 +26,33 @@ from src.utils import (
 logger = logging.getLogger(__name__)
 
 class SmartMeterClient:
+    """スマートメーターとの通信を管理するメインクラス。
+
+    シリアルポートの開閉、Wi-SUNモジュールの初期化、PANAセッションの管理、
+    ECHONET Liteプロパティの要求、およびデータ出力スレッドの制御を行います。
+
+    Attributes:
+        port (str): シリアルポート名 (例: '/dev/ttyUSB0')。
+        baudrate (int): ボーレート (例: 115200)。
+        ser (serial.Serial): `pyserial` のシリアルポートインスタンス。
+        connected (bool): PANAセッションが確立されているかを示すフラグ。
+        ipv6_addr (str): 接続したスマートメーターのIPv6アドレス。
+        output_handlers (list): データ出力ハンドラのリスト。
+        data_queue (Queue): 出力データを保持するキュー。
+        output_thread (threading.Thread): 出力処理を行うワーカースレッド。
+        running (bool): スレッドの実行状態を制御するフラグ。
+    """
     def __init__(self, port=SERIAL_PORT, baudrate=SERIAL_RATE, output_handlers=None):
+        """SmartMeterClientを初期化します。
+
+        Args:
+            port (str, optional): 使用するシリアルポート。
+                Defaults to SERIAL_PORT.
+            baudrate (int, optional): 通信ボーレート。
+                Defaults to SERIAL_RATE.
+            output_handlers (list, optional): データ出力ハンドラのリスト。
+                Defaults to None.
+        """
         self.port = port
         self.baudrate = baudrate
         self.ser = None
@@ -32,7 +64,11 @@ class SmartMeterClient:
         self.running = False
     
     def open_connection(self):
-        """シリアルポートを開く"""
+        """シリアルポートを開きます。
+
+        Returns:
+            bool: ポートのオープンに成功した場合はTrue、失敗した場合はFalse。
+        """
         try:
             self.ser = serial.Serial(
                 port=self.port,
@@ -49,13 +85,32 @@ class SmartMeterClient:
             return False
     
     def close_connection(self):
-        """シリアルポートを閉じる"""
+        """シリアルポートを閉じます。"""
         if self.ser and self.ser.is_open:
             self.ser.close()
             logger.info("シリアルポートを閉じました")
     
     def send_command(self, command, command_parts=None, wait_time=1, expected_response=None, timeout=10, add_newline=True):
-        """コマンドを送信し、応答を待機"""
+        """コマンドを送信し、応答を待機します。
+
+        この関数は、テキストコマンドと、それに続く追加のバイナリデータを
+        送信することができます。
+
+        Args:
+            command (str): 送信するテキストコマンド部分。
+            command_parts (bytes, optional): コマンドに続いて送信する
+                追加のバイナリデータ。Defaults to None.
+            wait_time (int, optional): コマンド送信後に待機する秒数。
+                Defaults to 1.
+            expected_response (str, optional): 応答に含まれることを期待する文字列。
+                これが見つかった場合、即座に応答を返します。Defaults to None.
+            timeout (int, optional): 応答を待つ最大秒数。Defaults to 10.
+            add_newline (bool, optional): テキストコマンドの末尾に改行コード
+                `\\r\\n` を付与するかどうか。Defaults to True.
+
+        Returns:
+            str | None: 受信した応答文字列。タイムアウトした場合はNone。
+        """
         if not self.ser or not self.ser.is_open:
             logger.error("シリアルポートが開いていません")
             return None
@@ -101,7 +156,14 @@ class SmartMeterClient:
         return response
     
     def initialize(self):
-        """BP35A1の初期化とスマートメーターへの接続"""
+        """Wi-SUNモジュールを初期化し、スマートメーターへ接続します。
+
+        Bルート認証、PANスキャン、PANAセッション確立までの一連の
+        シーケンスを実行します。
+
+        Returns:
+            bool: 初期化と接続に成功した場合はTrue、失敗した場合はFalse。
+        """
         if not self.open_connection():
             return False
         
@@ -212,7 +274,19 @@ class SmartMeterClient:
         return False
     
     def get_property(self, property_code, transaction_id=1):
-        """指定したプロパティ値を取得"""
+        """指定したECHONET Liteプロパティの値を取得します。
+
+        SKSENDTOコマンドでECHONET LiteのGet要求を送信し、ERXUDPで応答を待ち受けます。
+
+        Args:
+            property_code (str): 要求するプロパティのEPCコード（16進数文字列）。
+            transaction_id (int, optional): ECHONET LiteのトランザクションID。
+                Defaults to 1.
+
+        Returns:
+            str | None: 受信したECHONET Liteフレームのデータ部分（16進数文字列）。
+                取得に失敗した場合はNone。
+        """
         # 1. PANA接続状態の確認
         if not self.connected:
             logger.error("PANAセッションが確立されていません。get_propertyをスキップします。")
@@ -333,7 +407,15 @@ class SmartMeterClient:
         return response_data
     
     def get_meter_data(self):
-        """スマートメーターから各種データを取得"""
+        """スマートメーターから主要な電力データをまとめて取得します。
+
+        積算電力量、瞬時電力、瞬時電流などの複数のプロパティを順次要求し、
+        結果を一つの辞書にまとめて返します。
+
+        Returns:
+            dict | None: 取得したデータを含む辞書。
+                タイムスタンプ以外のデータが一つも取得できなかった場合はNone。
+        """
         if not self.connected:
             logger.error("スマートメーターに接続されていません")
             return None
@@ -383,14 +465,14 @@ class SmartMeterClient:
             return None
 
     def start_output_thread(self):
-        """出力スレッドを開始"""
+        """データ出力用のワーカースレッドを開始します。"""
         self.running = True
         self.output_thread = threading.Thread(target=self._output_worker)
         self.output_thread.daemon = True
         self.output_thread.start()
     
     def _output_worker(self):
-        """出力ワーカースレッド"""
+        """データキューからデータを取り出し、出力ハンドラに渡すワーカースレッド。"""
         while self.running:
             try:
                 # キューからデータを取得（ブロッキング）
@@ -410,7 +492,7 @@ class SmartMeterClient:
                     logger.error(f"出力スレッドエラー: {e}")
     
     def stop_output_thread(self):
-        """出力スレッドを停止"""
+        """データ出力用のワーカースレッドを停止します。"""
         self.running = False
         if self.output_thread and self.output_thread.is_alive():
             self.output_thread.join(2.0)  # 最大2秒待機

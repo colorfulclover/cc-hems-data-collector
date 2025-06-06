@@ -17,17 +17,31 @@ from src.config import CSV_HEADERS, PROJECT_ID, TOPIC_NAME
 logger = logging.getLogger(__name__)
 
 class OutputHandler:
-    """データ出力を処理するクラス"""
+    """取得した電力消費量データを様々な形式で出力するハンドラ。
+
+    標準出力、ファイル（JSON, YAML, CSV）、Google Cloud Pub/Subへの
+    データ出力機能を提供します。
+    
+    Attributes:
+        output_type (str): 出力タイプ ('stdout', 'file', 'cloud')。
+        output_format (str): 出力フォーマット ('json', 'yaml', 'csv')。
+        file_path (str): ファイル出力時のパス。
+        pubsub_project (str): Google CloudプロジェクトID。
+        pubsub_topic (str): Pub/Subトピック名。
+        pubsub_publisher (pubsub_v1.PublisherClient): Pub/Subクライアント。
+        topic_path (str): Pub/Subトピックのフルパス。
+    """
     
     def __init__(self, output_type, output_format=None, file_path=None, pubsub_project=None, pubsub_topic=None):
-        """
-        初期化
-        
-        :param output_type: 出力タイプ ('stdout', 'file', 'cloud')
-        :param output_format: 出力フォーマット ('json', 'yaml', 'csv')
-        :param file_path: ファイル出力パス
-        :param pubsub_project: Google Cloudプロジェクト
-        :param pubsub_topic: Pub/Subトピック名
+        """OutputHandlerを初期化します。
+
+        Args:
+            output_type (str): 出力タイプ ('stdout', 'file', 'cloud')。
+            output_format (str, optional): 出力フォーマット ('json', 'yaml', 'csv')。
+                Defaults to None.
+            file_path (str, optional): ファイル出力時のパス。Defaults to None.
+            pubsub_project (str, optional): Google CloudプロジェクトID。Defaults to None.
+            pubsub_topic (str, optional): Pub/Subトピック名。Defaults to None.
         """
         self.output_type = output_type
         self.output_format = output_format
@@ -57,7 +71,15 @@ class OutputHandler:
                         logger.info(f"CSVファイル初期化: {file_path}")
             
     def format_data(self, data):
-        """データを指定されたフォーマットに変換"""
+        """データを指定されたフォーマットの文字列またはリストに変換します。
+
+        Args:
+            data (dict): フォーマットするデータ。
+
+        Returns:
+            str | list | None: 指定されたフォーマットの文字列（JSON, YAML）、
+                またはリスト（CSV）。データがない場合はNone。
+        """
         if not data:
             return None
             
@@ -83,7 +105,14 @@ class OutputHandler:
             return str(data)
     
     def output(self, data):
-        """データを出力"""
+        """データを設定された出力先に書き込みます。
+
+        Args:
+            data (dict): 出力するデータ。
+
+        Returns:
+            bool: 出力が成功した場合はTrue、失敗した場合はFalse。
+        """
         if not data:
             logger.warning("出力するデータがありません")
             return False

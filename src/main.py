@@ -1,4 +1,10 @@
 # src/main.py
+"""HEMSデータ収集アプリケーションのメインモジュール。
+
+コマンドライン引数の解析、ロギング設定、出力ハンドラのセットアップ、
+そしてスマートメータークライアントの初期化とデータ取得ループの実行を
+担当します。
+"""
 import time
 import logging
 import argparse
@@ -20,7 +26,11 @@ from src.output_handler import OutputHandler
 logger = logging.getLogger(__name__)
 
 def parse_args():
-    """コマンドライン引数のパース"""
+    """コマンドライン引数を解析します。
+
+    Returns:
+        argparse.Namespace: パースされたコマンドライン引数を格納したオブジェクト。
+    """
     parser = argparse.ArgumentParser(description='HEMSデータ取得ツール')
     
     # 出力タイプ
@@ -59,7 +69,14 @@ def parse_args():
 
 
 def setup_output_handlers(args):
-    """出力ハンドラの設定"""
+    """コマンドライン引数に基づいて出力ハンドラのリストをセットアップします。
+
+    Args:
+        args (argparse.Namespace): パースされたコマンドライン引数。
+
+    Returns:
+        list[OutputHandler]: セットアップされたOutputHandlerのインスタンスのリスト。
+    """
     output_handlers = []
     
     if args.output == 'stdout' or args.output == 'all':
@@ -85,7 +102,12 @@ def setup_output_handlers(args):
 
 
 def main():
-    """メイン関数"""
+    """アプリケーションのメイン実行関数。
+
+    引数解析、ロギング設定、出力ハンドラとクライアントの初期化を行い、
+    データ取得のメインループを開始します。
+    KeyboardInterruptによる正常終了や、予期せぬエラーのハンドリングも行います。
+    """
     args = parse_args()
     
     # ログレベルの設定

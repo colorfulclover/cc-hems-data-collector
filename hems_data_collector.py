@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 # hems_data_collector.py（プロジェクトルート）
+"""HEMSデータ収集アプリケーションのエントリポイント。
+
+このスクリプトは、アプリケーションを起動するためのメインエントリポイントとして機能します。
+`src` ディレクトリをPythonのパスに追加し、`src.main` モジュールから `main` 関数を
+呼び出して実行します。
+"""
 
 import sys
 import os

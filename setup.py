@@ -1,4 +1,9 @@
 # setup.py
+"""HEMSデータ収集クライアントのパッケージ設定。
+
+このスクリプトは `setuptools` を使用して、プロジェクトのパッケージング、
+依存関係の定義、およびエントリポイントの設定を行います。
+"""
 from setuptools import setup, find_packages
 
 setup(

@@ -1,4 +1,10 @@
 # src/utils.py
+"""データ解析とユーティリティ関数。
+
+ECHONET Liteのフレーム解析、各種電力データの数値変換、
+タイムスタンプ生成など、プロジェクト全体で利用される
+ヘルパー関数を提供します。
+"""
 import re
 import logging
 from datetime import datetime
@@ -6,8 +12,20 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 def parse_echonet_frame(frame_hex_str: str) -> dict | None:
-    """
-    ECHONET Liteのフレーム(16進数文字列)を辞書にパースする。
+    """ECHONET Liteのフレーム(16進数文字列)を辞書にパースします。
+
+    Args:
+        frame_hex_str (str): パース対象のECHONET Liteフレーム（16進数文字列）。
+
+    Returns:
+        dict | None: パースされたフレーム情報を格納した辞書。
+            パースに失敗した場合はNone。
+            辞書の構造:
+            {
+                'EHD': str, 'TID': str, 'SEOJ': str, 'DEOJ': str,
+                'ESV': str, 'OPC': int,
+                'properties': [{'EPC': str, 'PDC': int, 'EDT': str}, ...]
+            }
     """
     if not frame_hex_str or len(frame_hex_str) < 24: # EHD+TID+SEOJ+DEOJ+ESV+OPC = 12 bytes = 24 chars
         logger.warning(f"短すぎる、または不正なECHONET Liteフレームです: {frame_hex_str}")
@@ -65,7 +83,16 @@ def parse_echonet_frame(frame_hex_str: str) -> dict | None:
         return None
 
 def parse_echonet_response(response, property_code):
-    """ECHONET Liteの応答から指定したプロパティのEDT値を抽出する"""
+    """ECHONET Liteの応答から指定したプロパティのEDT値を抽出します。
+
+    Args:
+        response (str): ERXUDPから受信したECHONET Liteフレーム（16進数文字列）。
+        property_code (str): 抽出したいプロパティのEPCコード（16進数文字列）。
+
+    Returns:
+        str | None: 見つかったプロパティのEDT（データ）部分の文字列。
+            見つからない、またはエラーの場合はNone。
+    """
     if not response:
         return None
     
@@ -89,7 +116,14 @@ def parse_echonet_response(response, property_code):
     return None
 
 def parse_cumulative_power(hex_value):
-    """積算電力量の解析"""
+    """積算電力量の16進数値をkWh単位の浮動小数点数に変換します。
+
+    Args:
+        hex_value (str): 積算電力量を示す16進数文字列。
+
+    Returns:
+        float | None: 変換後のkWh値。エラーの場合はNone。
+    """
     if not hex_value:
         return None
     try:
@@ -100,7 +134,14 @@ def parse_cumulative_power(hex_value):
         return None
 
 def parse_instant_power(hex_value):
-    """瞬時電力の解析"""
+    """瞬時電力の16進数値をW単位の整数に変換します。
+
+    Args:
+        hex_value (str): 瞬時電力を示す16進数文字列。
+
+    Returns:
+        int | None: 変換後のW値。エラーの場合はNone。
+    """
     if not hex_value:
         return None
     try:
@@ -111,7 +152,17 @@ def parse_instant_power(hex_value):
         return None
 
 def parse_current_value(hex_value):
-    """瞬時電流の解析"""
+    """瞬時電流の16進数値をA単位の辞書に変換します。
+
+    単相の場合は {'current': float}、三相の場合は {'current_r': float, 'current_t': float}
+    の形式で返します。
+
+    Args:
+        hex_value (str): 瞬時電流を示す16進数文字列。
+
+    Returns:
+        dict | None: 変換後の電流値を含む辞書。エラーの場合はNone。
+    """
     if not hex_value:
         return None
     try:
@@ -130,5 +181,9 @@ def parse_current_value(hex_value):
         return None
 
 def get_current_timestamp():
-    """現在のタイムスタンプを取得"""
+    """現在の時刻をISO 8601形式のタイムスタンプ文字列として取得します。
+
+    Returns:
+        str: ISO 8601形式のタイムスタンプ文字列。
+    """
     return datetime.now().isoformat()
