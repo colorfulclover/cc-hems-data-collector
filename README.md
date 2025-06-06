@@ -1,210 +1,167 @@
-# HEMS データ取得システム（ECHONET Lite クライアント）
+# HEMS Data Collector for Smart Meter
 
-スマートメーターから ECHONET Lite プロトコルを使用して HEMS（Home Energy Management System）データを取得し、複数の形式で出力するツールです。このクライアントは、USBトングル（BP35A1など）を使用してスマートメーターと通信します。
+スマートメーターからECHONET Liteプロトコルを使用して電力消費量データを取得し、リアルタイムで出力するためのPython製クライアントツールです。
+Wi-SUNモジュール（BP35A1など）を搭載したUSBドングルを介してスマートメーターと通信します。
 
-## 特徴
+## 概要
 
-- スマートメーターからリアルタイムにデータを取得
-- 複数の出力形式に対応：JSON、YAML、CSV
-- 柔軟な出力先の選択：
-  - 標準出力
-  - ファイル出力
+このツールは、家庭の電力使用状況を把握・分析したい開発者や研究者、ホビイストを対象としています。
+スマートメーターから取得したデータを、標準出力、ファイル、またはGoogle Cloud Pub/Subへ柔軟に出力することができ、Home Energy Management System (HEMS) のデータ収集基盤として利用できます。
+
+## 主な機能
+
+- **スマートメーターからのデータ取得**:
+  - 積算電力量 (kWh)
+  - 瞬時電力 (W)
+  - 瞬時電流 (R相, T相)
+- **柔軟な出力先**:
+  - 標準出力 (stdout)
+  - ファイル (JSON, YAML, CSV)
   - Google Cloud Pub/Sub
-- 定期的なデータ取得間隔の設定
-- 低消費電力で連続稼働可能
+- **豊富な設定オプション**:
+  - コマンドライン引数と環境変数の両方で設定可能
+  - データ取得間隔、シリアルポート、Bルート認証情報などを指定可能
+- **堅牢な接続処理**:
+  - ネットワークスキャンによる最適なチャンネル・PANの自動設定
+  - PANAセッションの自動再接続機能
 
-## 必要なもの
+## 動作要件
 
-- Python 3.6以上
-- Wi-SUNトングル（例：BP35A1）
-- Bルート認証ID・パスワード（電力会社から取得）
-- 対応するスマートメーター
+- Python 3.9以上
+- Wi-SUN USBドングル (例: [ローム BP35A1](https://www.rohm.co.jp/products/wireless-communication/sub-ghz-wireless-modules/bp35a1-product))
+- スマートメーター (Bルートサービス対応)
+- Bルート認証ID・パスワード (契約している電力会社から取得)
 
-## ディレクトリ構成
-```text
-hems-client/
-│
-├── requirements.txt        # 依存パッケージリスト
-├── setup.py                # セットアップスクリプト（オプション）
-├── README.md               # プロジェクト説明
-├── hems_data_collector.py  # プロジェクトルートからの実行スクリプト
-│
-└── src/                    # ソースコードディレクトリ
-    ├── __init__.py         # Pythonパッケージ化
-    ├── main.py             # メインスクリプト
-    ├── config.py           # 設定値の管理
-    ├── serial_client.py    # シリアル通信とスマートメーター制御
-    ├── output_handler.py   # 出力処理
-    └── utils.py            # ユーティリティ関数
+---
 
-```
-
-
-## インストール方法
+## インストール
 
 ### 1. リポジトリのクローン
-```shell
-git clone https://github.com/colorfulclover/hems-data-collector.git
-cd hems-data-collector
+```bash
+git clone https://github.com/your-username/cc-hems-data-collector.git
+cd cc-hems-data-collector
 ```
 
-### 2. 仮想環境のセットアップ（推奨）
-```shell
-# 仮想環境の作成
-python -m venv venv
-
-# 仮想環境の有効化（Linux/Mac）
+### 2. 仮想環境のセットアップ (推奨)
+```bash
+python3 -m venv venv
 source venv/bin/activate
-
-# 仮想環境の有効化（Windows）
-venv\Scripts\activate.bat
+# Windowsの場合: venv\\Scripts\\activate
 ```
 
-### 3. 依存パッケージのインストール
-```shell
+### 3. 依存関係のインストール
+```bash
 pip install -r requirements.txt
 ```
-
-### 4. Bルート認証情報の設定
-環境変数として設定（推奨）:
-```shell
-export B_ROUTE_ID="your_b_route_id"
-export B_ROUTE_PASSWORD="your_b_route_password"
-```
-または、 `src/config.py` ファイル内で直接編集することもできます。 
-
-### 5. シリアルポートの設定
-USBトングルを接続し、シリアルポートを確認してください。デフォルトでは `/dev/ttyUSB0` を使用しますが、環境に合わせて `src/config.py` で変更するか、コマンドラインオプションで指定できます。 
-
-## 使用方法
-### 基本的な使い方
-```shell
-# プロジェクトルートから実行
-./hems_data_collector.py
-
-# または
-python hems_data_collector.py
-```
-
-### 出力形式の選択
-```shell
-# JSON形式で標準出力（デフォルト）
-python hems_client.py
-
-# CSV形式で標準出力
-python hems_client.py --format csv
-
-# YAML形式でファイル出力
-python hems_client.py --output file --format yaml --file hems_data.yaml
-```
-
-### 出力先の選択
-```shell
-# 標準出力（デフォルト）
-python hems_client.py --output stdout
-
-# ファイル出力
-python hems_client.py --output file --file hems_data.json
-
-# Google Cloud Pub/Sub出力
-python hems_client.py --output cloud --project your-project-id --topic hems-data
-
-# 全ての出力先に同時出力
-python hems_client.py --output all
-```
-
-### その他のオプション
-```shell
-# データ取得間隔を1分（60秒）に設定
-python hems_client.py --interval 60
-
-# デバッグモードで実行（詳細ログ）
-python hems_client.py --debug
-
-# シリアルポートを指定
-python hems_client.py --port /dev/ttyACM0
-```
-
-### 全オプション一覧
-```shell
-python hems_client.py --help
-```
-以下のようなヘルプが表示されます：
-```shell
-usage: hems_client.py [-h] [--output {stdout,file,cloud,all}] 
-                      [--format {json,yaml,csv}] [--file FILE]
-                      [--project PROJECT] [--topic TOPIC] [--port PORT]
-                      [--baudrate BAUDRATE] [--interval INTERVAL] [--debug]
-
-HEMSデータ取得ツール
-
-optional arguments:
-  -h, --help            ヘルプメッセージの表示
-  --output {stdout,file,cloud,all}, -o {stdout,file,cloud,all}
-                        出力タイプ (デフォルト: stdout)
-  --format {json,yaml,csv}, -f {json,yaml,csv}
-                        出力フォーマット (デフォルト: json)
-  --file FILE           ファイル出力パス (デフォルト: hems_data.dat)
-  --project PROJECT     Google Cloudプロジェクト
-  --topic TOPIC         Pub/Subトピック名
-  --port PORT           シリアルポート
-  --baudrate BAUDRATE   ボーレート
-  --interval INTERVAL, -i INTERVAL
-                        データ取得間隔（秒）
-  --debug               デバッグモードを有効化
-```
-
-## 取得データ
-以下のデータを取得します：
-- 積算電力量（kWh）
-- 瞬時電力（W）
-- 瞬時電流（A）- 単相または三相（R相、T相）
-
-### 出力例（JSON）
-```json
-{
-  "timestamp": "2023-06-15T15:23:42.123456",
-  "cumulative_power": 12345.6,
-  "instant_power": 1234,
-  "current_r": 5.4,
-  "current_t": 5.2
-}
-```
-
-## Google Cloud Pub/Sub出力
-Google Cloud Pub/Subを使用するには、追加のセットアップが必要です：
-1. Google Cloud Pub/Subライブラリをインストール：
-```shell
+Google Cloud Pub/Subへ出力する場合は、追加でライブラリをインストールします。
+```bash
 pip install google-cloud-pubsub
 ```
 
-2. Google Cloud認証情報の設定：
-```shell
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your-project-credentials.json"
+---
+
+## 設定
+
+アプリケーションの動作は、環境変数またはコマンドライン引数で設定できます。両方が指定された場合は、コマンドライン引数が優先されます。
+
+### 環境変数 (推奨)
+
+以下の環境変数を設定することで、認証情報などを安全に管理できます。
+
+| 変数名 | 説明 | デフォルト値 |
+|:--- |:--- |:--- |
+| `B_ROUTE_ID` | 電力会社から提供されるBルート認証ID。 | (なし) |
+| `B_ROUTE_PASSWORD` | 電力会社から提供されるBルートパスワード。 | (なし) |
+| `SERIAL_PORT` | Wi-SUNドングルが接続されているシリアルポート。 | `/dev/ttyUSB0` |
+| `SERIAL_RATE` | シリアルポートのボーレート。 | `115200` |
+| `GCP_PROJECT_ID` | Google Cloud Pub/Sub出力用のプロジェクトID。 | `your-project-id` |
+| `GCP_TOPIC_NAME` | Google Cloud Pub/Sub出力用のトピック名。 | `hems-data` |
+
+`.env`ファイルを使用する場合は、以下のように起動します。
+```bash
+# export $(cat .env | xargs) && python hems_data_collector.py
 ```
 
-3. プロジェクトIDとトピック名の設定：
-```shell
-export GCP_PROJECT_ID="your-project-id"
-export GCP_TOPIC_NAME="hems-data"
+---
+
+## 使い方
+
+プロジェクトのルートディレクトリから`hems_data_collector.py`を実行します。
+
+### 基本的な実行
+
+`--output`オプションを指定しない場合、取得したデータはログとして標準エラーに出力されるのみで、ファイル等への書き出しは行われません。
+```bash
+python hems_data_collector.py
 ```
 
-## 注意点
-1. **Bルート認証情報**: 実際の認証情報は電力会社から取得する必要があります。
-2. **シリアルポート**: 使用するシリアルポートは環境によって異なります。
-3. **スマートメーターの応答**: 各スマートメーターの仕様によって応答フォーマットが異なる場合があります。
-4. **セキュリティ**: Bルート認証情報は機密情報なので、環境変数での設定を推奨します。
+### 出力例
+
+**JSON形式で標準出力する**
+```bash
+python hems_data_collector.py --output stdout --format json
+```
+出力サンプル:
+```json
+{"timestamp": "2023-10-27T10:00:00.123456", "cumulative_power": 12345.6, "instant_power": 500, "current_r": 2.5, "current_t": 2.5}
+```
+
+**CSV形式でファイルに出力する**
+```bash
+python hems_data_collector.py --output file --format csv --file power_data.csv
+```
+`power_data.csv` の内容:
+```csv
+timestamp,cumulative_power_kwh,instant_power_w,current_r_a,current_t_a
+2023-10-27T10:00:00.123456,12345.6,500,2.5,2.5
+2023-10-27T10:05:00.456789,12345.7,550,2.7,2.8
+```
+
+**Google Cloud Pub/Sub へ出力する**
+```bash
+python hems_data_collector.py --output cloud
+```
+(事前に`GCP_PROJECT_ID`と`GCP_TOPIC_NAME`環境変数の設定、または`gcloud auth application-default login`での認証が必要です)
+
+
+### コマンドラインオプション
+
+`python hems_data_collector.py --help`で詳細なオプションを確認できます。
+
+| オプション | 説明 | デフォルト値 |
+|:--- |:--- |:--- |
+| `-h`, `--help` | ヘルプメッセージを表示 | |
+| `-o`, `--output` | 出力タイプ (`stdout`, `file`, `cloud`, `all`)。 | `None` (ログ出力のみ) |
+| `-f`, `--format` | 出力フォーマット (`json`, `yaml`, `csv`)。 | `json` |
+| `--file` | ファイル出力時のパス。 | `hems_data.dat` |
+| `--project` | Google CloudプロジェクトID。 | (環境変数またはconfig値) |
+| `--topic` | Pub/Subトピック名。 | (環境変数またはconfig値) |
+| `--port` | シリアルポート。 | (環境変数またはconfig値) |
+| `--baudrate`| ボーレート。 | (環境変数またはconfig値) |
+| `--meter-channel`| スマートメーターのチャンネル。 | `33` |
+| `--meter-panid`| スマートメーターのPAN ID。 | `0000` |
+| `--meter-ipv6`| スマートメーターのIPv6アドレス。 | `FE80...` |
+| `-i`, `--interval`| データ取得間隔（秒）。 | `300` |
+| `--debug` | デバッグモードを有効化（詳細ログ出力）。 | `False` |
+
+
+---
 
 ## トラブルシューティング
-- **接続エラー**: USBトングルが正しく接続されているか、シリアルポートの設定が正しいか確認してください。
-- **認証エラー**: Bルート認証情報が正しいか確認してください。
-- **データ取得エラー**: `--debug` オプションを使用して詳細なログを確認してください。
-- **パーミッションエラー**: シリアルポートへのアクセス権限を確認してください。必要に応じて `sudo` を使用するか、ユーザーをダイアルアウトグループに追加してください。
 
-## 今後の予定
-- TBD
+- **接続できない**:
+  - Wi-SUNドングルがPCに正しく認識されているか確認してください (`dmesg | grep tty`など)。
+  - `--port`で正しいシリアルポートを指定しているか確認してください。
+  - シリアルポートへのアクセス権限があるか確認してください (例: `sudo usermod -aG dialout $USER`)。
+- **データ取得に失敗する (`FAIL ER04`など)**:
+  - BルートID/パスワードが正しいか確認してください。
+  - ドングルとスマートメーターの距離や、間の障害物など、電波環境を確認してください。
+  - `--debug`オプションを付けて実行し、詳細なエラーログを確認してください。
 
 ## ライセンス
-MIT
+
+このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
+
 ## 貢献
+
 プルリクエストは歓迎します。大きな変更を加える前には、まずissueを作成して議論してください。
