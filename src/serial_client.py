@@ -53,19 +53,23 @@ class SmartMeterClient:
             self.ser.close()
             logger.info("シリアルポートを閉じました")
     
-    def send_command(self, command, wait_time=1, expected_response=None, timeout=10):
+    def send_command(self, command, command_parts=None, wait_time=1, expected_response=None, timeout=10, add_newline=True):
         """コマンドを送信し、応答を待機"""
         if not self.ser or not self.ser.is_open:
             logger.error("シリアルポートが開いていません")
             return None
         
         # コマンドの末尾に改行を追加（必要な場合）
-        if not command.endswith('\r\n'):
+        if add_newline and not command.endswith('\r\n'):
             command += '\r\n'
         
         # コマンド送信
-        logger.debug(f"送信: {command.strip()}")
-        self.ser.write(command.encode('utf-8'))
+        if  command_parts is None:
+            logger.debug(f"送信: {command.strip()}")
+            self.ser.write(command.encode('utf-8'))
+        else:
+            logger.debug(f"送信: {command.strip()} {command_parts}")
+            self.ser.write(command.encode('utf-8') + command_parts)
         self.ser.flush()
         
         # 応答待機
@@ -208,15 +212,12 @@ class SmartMeterClient:
     
     def get_property(self, property_code, transaction_id=1):
         """指定したプロパティ値を取得"""
+        # 1. PANA接続状態の確認
         if not self.connected:
-            logger.error("スマートメーターに接続されていません")
+            logger.error("PANAセッションが確立されていません。get_propertyをスキップします。")
             return None
-            
-        # ECHONET Lite要求の作成
-        # データ長は64バイト（実際の長さに応じて調整）
-        command = f"SKSENDTO 1 {self.ipv6_addr} 0E1A 1 0040 "
-        
-        # ECHONET Lite電文の作成
+
+        # ECHONET Lite電文をバイト列(bytes)として構築
         # 10 81: EHD（ECHONET Lite ヘッダ）
         # xx xx: TID（トランザクションID）
         # 05 FF 01: SEOJ（送信元ECHONET Liteオブジェクト）
@@ -225,13 +226,114 @@ class SmartMeterClient:
         # 01: OPC（処理プロパティ数）
         # xx: EPC（取得するプロパティ）
         # 00: PDC（プロパティデータカウンタ）
-        tid_hex = format(transaction_id, '04x')
-        echonet_frame = f"1081{tid_hex}05FF010288016201{property_code}00"
+        try:
+            # 可変部分をバイト列に変換
+            tid_bytes = transaction_id.to_bytes(2, 'big') # 2バイトのビッグエンディアン
+            property_code_byte = int(property_code, 16).to_bytes(1, 'big') # 1バイト
+
+            # ECHONET Liteフレームを構築
+            echonet_lite_frame_bytes = (
+                b'\x10\x81'        # EHD
+                + tid_bytes        # TID
+                + b'\x05\xFF\x01'  # SEOJ (送信元)
+                + b'\x02\x88\x01'  # DEOJ (宛先)
+                + b'\x62'          # ESV (Get)
+                + b'\x01'          # OPC (処理プロパティ数)
+                + property_code_byte # EPC (プロパティコード)
+                + b'\x00'          # PDC (データカウンタ)
+            )
+        except Exception as e:
+            logger.error(f"ECHONET Liteフレームの構築に失敗しました: {e}")
+            return None
+
+        # DATALENの計算
+        data_len_bytes = len(echonet_lite_frame_bytes)
+        datalen_hex_str = format(data_len_bytes, '04X')
+
+        # SKSENDTOコマンドの組み立て
+        base_sksendto_command = f"SKSENDTO 1 {self.ipv6_addr} 0E1A 1"
+        full_sksendto_command = f"{base_sksendto_command} {datalen_hex_str} "
+
+        # 2. SKSENDTOコマンドの実行と応答確認
+        logger.debug(f"SKSENDTO送信: {full_sksendto_command}")
+        sksendto_response = self.send_command(full_sksendto_command, command_parts=echonet_lite_frame_bytes, expected_response="OK", wait_time=0.2, add_newline=False) # wait_timeはOK/FAIL応答受信までの時間
+
+        if not sksendto_response:
+            logger.error("SKSENDTOコマンドへの応答がありませんでした。")
+            return None
         
-        # コマンドを送信
-        response = self.send_command(command + echonet_frame, wait_time=2)
+        if "FAIL" in sksendto_response:
+            logger.error(f"SKSENDTOコマンドが失敗しました: {sksendto_response.strip()}")
+            return None
         
-        return response
+        if "OK" not in sksendto_response:
+            logger.warning(f"SKSENDTOコマンドの応答がOKではありませんでした: {sksendto_response.strip()}")
+
+        # 3. ERXUDP 受信データの取得
+        response_data = ""
+        logger.info(f"ERXUDP待機開始 (プロパティ: {property_code})")
+        for i in range(20):  # 最大20秒程度待機
+            if not self.running:
+                logger.info("データ取得が中断されました。(ERXUDP 待機中)")
+                return None
+            
+            line = ""
+            if self.ser and self.ser.in_waiting > 0:
+                try:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        logger.debug(f"受信 (ERXUDP 待機中 Loop {i+1}/20): {line}")
+                except Exception as e:
+                    logger.warning(f"ERXUDP 待機中のシリアル読み取りエラー: {e}")
+                    time.sleep(0.1) # 少し待って読み取り再試行
+                    continue
+            
+            if not line: # 何も受信しなかった場合
+                time.sleep(0.5)
+                continue
+
+            if line.startswith("ERXUDP"):
+                # ERXUDP <SENDER IPADDR> <DEST IPADDR> <RPORT> <LPORT> <SENDERLLA> <SECURED> <DATALEN> <DATA>
+                parts = line.strip().split(' ')
+                if len(parts) >= 9:
+                    echonet_data_hex = parts[8]
+                    # ECHONET Lite応答の簡易検証 (TID, SEOJ, ESVなど)
+                    # tid_hex (送信時) と応答のTIDが一致するか？
+                    # data[0:4] : EHD (1081)
+                    # data[4:8] : TID
+                    # data[8:14]: SEOJ (028801)
+                    # data[14:20]: DEOJ (05FF01)
+                    # data[20:22]: ESV (応答なので72など)
+                    # data[22:24]: OPC
+                    # data[24:26]: EPC (応答対象のプロパティコード)
+                    # data[26:28]: PDC
+                    # data[28:]  : EDT
+                    
+                    response_seoj = echonet_data_hex[8:14]
+                    response_esv = echonet_data_hex[20:22]
+                    response_epc = echonet_data_hex[24:26]
+
+                    # ここでは指定したプロパティに対する応答(ESV=72)かを簡単にチェック
+                    if response_seoj == "028801" and response_esv == "72" and response_epc.upper() == property_code.upper():
+                        logger.info(f"ERXUDP受信成功 (プロパティ: {property_code}): {echonet_data_hex}")
+                        response_data = echonet_data_hex
+                        break 
+                    else:
+                        logger.warning(f"受信したERXUDPが期待する応答ではありませんでした: SEOJ={response_seoj}, ESV={response_esv}, EPC={response_epc} (期待EPC={property_code})")
+                else:
+                    logger.warning(f"受信したERXUDPの形式が不正です: {line}")
+
+            elif "FAIL" in line: # ERXUDP待機中にFAILを受信した場合
+                logger.error(f"ERXUDP待機中にFAILを受信しました: {line}")
+                response_data = "" # エラーなのでデータは空
+                break
+            
+            time.sleep(0.5)
+
+        if not response_data:
+            logger.warning(f"ERXUDP待機タイムアウトまたはエラー (プロパティ: {property_code})")
+
+        return response_data
     
     def get_meter_data(self):
         """スマートメーターから各種データを取得"""
