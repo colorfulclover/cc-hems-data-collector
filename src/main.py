@@ -25,7 +25,7 @@ def parse_args():
     
     # 出力タイプ
     parser.add_argument('--output', '-o', choices=['stdout', 'file', 'cloud', 'all'], 
-                        default='stdout', help='出力タイプ (デフォルト: stdout)')
+                        default=None, help='出力タイプ (デフォルト: なし、ログ出力のみ)')
     
     # 出力フォーマット
     parser.add_argument('--format', '-f', choices=['json', 'yaml', 'csv'], 
