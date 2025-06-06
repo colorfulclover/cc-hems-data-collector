@@ -13,7 +13,8 @@ from src.config import (
 )
 from src.utils import (
     parse_echonet_response, parse_cumulative_power,
-    parse_instant_power, parse_current_value, get_current_timestamp
+    parse_instant_power, parse_current_value, get_current_timestamp,
+    parse_echonet_frame
 )
 
 logger = logging.getLogger(__name__)
@@ -218,14 +219,7 @@ class SmartMeterClient:
             return None
 
         # ECHONET Lite電文をバイト列(bytes)として構築
-        # 10 81: EHD（ECHONET Lite ヘッダ）
-        # xx xx: TID（トランザクションID）
-        # 05 FF 01: SEOJ（送信元ECHONET Liteオブジェクト）
-        # 02 88 01: DEOJ（宛先ECHONET Liteオブジェクト - 低圧スマート電力量メータ）
-        # 62: ESV（Get）
-        # 01: OPC（処理プロパティ数）
-        # xx: EPC（取得するプロパティ）
-        # 00: PDC（プロパティデータカウンタ）
+        request_tid_hex = format(transaction_id, "04X") # TIDを比較用に保持
         try:
             # 可変部分をバイト列に変換
             tid_bytes = transaction_id.to_bytes(2, 'big') # 2バイトのビッグエンディアン
@@ -297,29 +291,32 @@ class SmartMeterClient:
                 parts = line.strip().split(' ')
                 if len(parts) >= 9:
                     echonet_data_hex = parts[8]
-                    # ECHONET Lite応答の簡易検証 (TID, SEOJ, ESVなど)
-                    # tid_hex (送信時) と応答のTIDが一致するか？
-                    # data[0:4] : EHD (1081)
-                    # data[4:8] : TID
-                    # data[8:14]: SEOJ (028801)
-                    # data[14:20]: DEOJ (05FF01)
-                    # data[20:22]: ESV (応答なので72など)
-                    # data[22:24]: OPC
-                    # data[24:26]: EPC (応答対象のプロパティコード)
-                    # data[26:28]: PDC
-                    # data[28:]  : EDT
-                    
-                    response_seoj = echonet_data_hex[8:14]
-                    response_esv = echonet_data_hex[20:22]
-                    response_epc = echonet_data_hex[24:26]
+                    parsed_frame = parse_echonet_frame(echonet_data_hex)
 
-                    # ここでは指定したプロパティに対する応答(ESV=72)かを簡単にチェック
-                    if response_seoj == "028801" and response_esv == "72" and response_epc.upper() == property_code.upper():
-                        logger.info(f"ERXUDP受信成功 (プロパティ: {property_code}): {echonet_data_hex}")
-                        response_data = echonet_data_hex
-                        break 
-                    else:
-                        logger.warning(f"受信したERXUDPが期待する応答ではありませんでした: SEOJ={response_seoj}, ESV={response_esv}, EPC={response_epc} (期待EPC={property_code})")
+                    if not parsed_frame:
+                        logger.warning(f"ECHONET Liteフレームのパースに失敗しました: {echonet_data_hex}")
+                        continue # 次の行を読む
+
+                    # TIDがリクエストと一致するか確認
+                    if parsed_frame['TID'] != request_tid_hex:
+                        logger.debug(f"TIDが不一致のためスキップ: 受信={parsed_frame['TID']}, 期待={request_tid_hex}")
+                        continue
+
+                    # ESVが応答(Get_Res)か確認
+                    if parsed_frame['ESV'] != '72':
+                        logger.warning(f"期待する応答(ESV=72)ではありませんでした: ESV={parsed_frame['ESV']}")
+                        continue
+
+                    # 要求したプロパティが含まれているか探す
+                    for prop in parsed_frame['properties']:
+                        if prop['EPC'] == property_code.upper():
+                            logger.info(f"ERXUDP受信成功 (プロパティ: {property_code}): {echonet_data_hex}")
+                            response_data = echonet_data_hex # レスポンスとしてフレーム全体を返す
+                            break # プロパティが見つかったので内側のループを抜ける
+                    
+                    if response_data:
+                        break # 応答が得られたので外側の待機ループも抜ける
+
                 else:
                     logger.warning(f"受信したERXUDPの形式が不正です: {line}")
 

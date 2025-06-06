@@ -5,19 +5,88 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+def parse_echonet_frame(frame_hex_str: str) -> dict | None:
+    """
+    ECHONET Liteのフレーム(16進数文字列)を辞書にパースする。
+    """
+    if not frame_hex_str or len(frame_hex_str) < 24: # EHD+TID+SEOJ+DEOJ+ESV+OPC = 12 bytes = 24 chars
+        logger.warning(f"短すぎる、または不正なECHONET Liteフレームです: {frame_hex_str}")
+        return None
+
+    try:
+        data = {
+            'EHD': frame_hex_str[0:4],
+            'TID': frame_hex_str[4:8],
+            'SEOJ': frame_hex_str[8:14],
+            'DEOJ': frame_hex_str[14:20],
+            'ESV': frame_hex_str[20:22],
+            'OPC': int(frame_hex_str[22:24], 16),
+            'properties': []
+        }
+
+        if data['EHD'] != '1081':
+            logger.warning(f"不正なECHONET Liteヘッダです: {data['EHD']}")
+            return None
+
+        # ESVがエラー応答(SNA)かチェック
+        if data['ESV'].startswith('5'):
+             logger.warning(f"ESVがエラー応答(SNA)を示しています: {data['ESV']}. フレーム: {frame_hex_str}")
+
+        # OPCに基づいてプロパティをパース
+        current_pos = 24
+        for _ in range(data['OPC']):
+            if len(frame_hex_str) < current_pos + 4: # EPC(2) + PDC(2)
+                logger.error("フレームが短いためプロパティをパースできません。")
+                break
+            
+            epc = frame_hex_str[current_pos : current_pos+2]
+            pdc = int(frame_hex_str[current_pos+2 : current_pos+4], 16)
+            
+            edt_start = current_pos + 4
+            edt_end = edt_start + (pdc * 2)
+
+            if len(frame_hex_str) < edt_end:
+                logger.error(f"フレームが短いためEDTをパースできません。EPC: {epc}, PDC: {pdc}")
+                break
+            
+            edt = frame_hex_str[edt_start:edt_end]
+            
+            data['properties'].append({
+                'EPC': epc.upper(),
+                'PDC': pdc,
+                'EDT': edt.upper()
+            })
+            current_pos = edt_end
+        
+        return data
+
+    except (ValueError, IndexError) as e:
+        logger.error(f"ECHONET Liteフレームのパース中にエラーが発生しました: {e}。フレーム: {frame_hex_str}")
+        return None
+
 def parse_echonet_response(response, property_code):
-    """ECHONET Liteの応答からプロパティ値を抽出"""
+    """ECHONET Liteの応答から指定したプロパティのEDT値を抽出する"""
     if not response:
         return None
     
-    # プロパティ値を正規表現で抽出
-    pattern = r'1081......0288010102880172......{}..(.*?)(?:\r|\n|$)'.format(property_code)
-    match = re.search(pattern, response, re.MULTILINE)
+    parsed_frame = parse_echonet_frame(response)
     
-    if not match:
+    if not parsed_frame:
         return None
-        
-    return match.group(1)
+
+    # 応答(Get_Res)か確認
+    if parsed_frame['ESV'] != '72':
+        logger.warning(f"期待する応答(ESV=72)ではありませんでした: ESV={parsed_frame['ESV']}")
+        return None
+
+    # 要求したプロパティが含まれているか探す
+    for prop in parsed_frame['properties']:
+        if prop['EPC'] == property_code.upper():
+            logger.debug(f"プロパティ {property_code} の値(EDT)が見つかりました: {prop['EDT']}")
+            return prop['EDT']
+    
+    logger.warning(f"応答内に要求したプロパティ {property_code} が見つかりませんでした。")
+    return None
 
 def parse_cumulative_power(hex_value):
     """積算電力量の解析"""
