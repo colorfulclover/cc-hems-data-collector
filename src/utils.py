@@ -166,16 +166,20 @@ def parse_current_value(hex_value):
     if not hex_value:
         return None
     try:
-        # 単相の場合
-        if len(hex_value) == 2:
+        # 三相3線式の場合 (4バイト = 8文字)
+        if len(hex_value) == 8:
+            # 2バイトずつに分割して10で割る
+            r_phase = int(hex_value[0:4], 16) / 10.0
+            t_phase = int(hex_value[4:8], 16) / 10.0
+            return {'current_r': r_phase, 'current_t': t_phase}
+        # 単相2線式の場合 (2バイト = 4文字)
+        elif len(hex_value) == 4:
             current_value = int(hex_value, 16) / 10.0  # 単位はA
             return {'current': current_value}
-        # 三相の場合
-        elif len(hex_value) >= 4:
-            r_phase = int(hex_value[0:2], 16) / 10.0
-            t_phase = int(hex_value[2:4], 16) / 10.0
-            return {'current_r': r_phase, 'current_t': t_phase}
-        return None
+        else:
+            logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")
+            return None
+            
     except (ValueError, TypeError):
         logger.error(f"瞬時電流の解析エラー: {hex_value}")
         return None
