@@ -6,7 +6,7 @@
 
 ## 主な機能
 
-- **データ取得**: Wi-SUNモジュールを介してスマートメーターに接続し、瞬時電力、瞬時電流、積算電力量、30分ごとの定時積算電力量などを定期的に取得します。
+- **データ取得**: Wi-SUNモジュールを介してスマートメーターに接続し、瞬時電力、瞬時電流、積算電力量、30分ごとの定時積算電力量、直近30分間の消費電力量などを定期的に取得します。
 - **柔軟な実行タイミング**: cronライクなスケジュール実行 (`schedule` モード)と、固定間隔での実行 (`interval` モード)をサポートします。
 - **多様な出力先**: 取得したデータは、標準出力、ファイル、Google Cloud Pub/Sub、Webhookに送信できます。複数の出力先を同時に指定することも可能です。
 - **選べる出力形式**: 出力データは `json`, `yaml`, `csv` から選択できます。
@@ -72,6 +72,9 @@ GCP_TOPIC_NAME=hems-data
 
 # Webhook 設定 (必要な場合)
 WEBHOOK_URL=http://your-server.com/webhook
+
+# タイムゾーン設定 (必要な場合、デフォルトは Asia/Tokyo)
+LOCAL_TIMEZONE=Asia/Tokyo
 ```
 
 ### 環境変数一覧
@@ -85,6 +88,7 @@ WEBHOOK_URL=http://your-server.com/webhook
 | `GCP_PROJECT_ID` | Google CloudプロジェクトID。 | `your-project-id` |
 | `GCP_TOPIC_NAME` | Google Cloud Pub/Subのトピック名。 | `hems-data` |
 | `WEBHOOK_URL` | Webhookの送信先URL。 | `http://localhost:8000/webhook` |
+| `LOCAL_TIMEZONE` | データ取得元のタイムゾーン。`Asia/Tokyo`など`zoneinfo`が認識する名前で指定。 | `Asia/Tokyo` |
 
 ## 使い方
 

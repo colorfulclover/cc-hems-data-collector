@@ -20,7 +20,7 @@ from hems_data_collector.config import (
 from hems_data_collector.utils import (
     parse_echonet_response, parse_cumulative_power, parse_power_unit,
     parse_instant_power, parse_current_value, get_current_timestamp,
-    parse_echonet_frame, parse_historical_power
+    parse_echonet_frame, parse_historical_power, parse_recent_30min_consumption
 )
 
 logger = logging.getLogger(__name__)
@@ -492,6 +492,16 @@ class SmartMeterClient:
                 if historical_data:
                     data.update(historical_data)
                     logger.info(f"定時積算電力量: {historical_data['historical_cumulative_power_kwh']} kWh ({historical_data['historical_timestamp']})")
+
+            # 積算電力量計測値履歴2(EC)から30分消費電力を取得
+            logger.info("積算電力量履歴2を要求中...")
+            response = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_2'], 6)
+            hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_2'])
+            if hex_value:
+                recent_consumption_data = parse_recent_30min_consumption(hex_value, power_multiplier)
+                if recent_consumption_data:
+                    data.update(recent_consumption_data)
+                    logger.info(f"直近30分消費電力量: {recent_consumption_data['recent_30min_consumption_kwh']} kWh ({recent_consumption_data['recent_30min_timestamp']})")
 
             return data if len(data) > 1 else None  # タイムスタンプ以外のデータがある場合のみ返す
             

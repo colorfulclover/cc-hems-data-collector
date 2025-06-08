@@ -53,6 +53,7 @@ ECHONET_PROPERTY_CODES = {
     'CUMULATIVE_POWER': "E0",  # 積算電力量計測値
     'CUMULATIVE_POWER_UNIT': "E1", # 積算電力量単位
     'HISTORICAL_CUMULATIVE_POWER': "EA", # 定時積算電力量計測値
+    'CUMULATIVE_POWER_HISTORY_2': "EC", # 積算電力量計測値履歴2
     'INSTANT_POWER': "E7",     # 瞬時電力計測値
     'CURRENT_VALUE': "E8",     # 瞬時電流計測値
 }
@@ -65,5 +66,7 @@ CSV_HEADERS = [
     'current_r_a', 
     'current_t_a',
     'historical_timestamp',
-    'historical_cumulative_power_kwh'
+    'historical_cumulative_power_kwh',
+    'recent_30min_timestamp',
+    'recent_30min_consumption_kwh'
 ]

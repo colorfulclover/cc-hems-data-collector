@@ -328,3 +328,76 @@ def parse_historical_power(hex_value, multiplier=1.0):
     except (ValueError, TypeError) as e:
         logger.error(f"定時積算電力量の解析エラー: {e}, データ: {hex_value}")
         return None
+
+def parse_recent_30min_consumption(edt, multiplier=1.0):
+    """
+    積算電力量計測値履歴2（EDT: 0xEC）を解析し、
+    直近30分間の消費電力量を計算する。
+
+    Args:
+        edt (str): 0xECの応答データ（16進数文字列）。
+        multiplier (float): 積算電力量に適用する単位倍率。
+
+    Returns:
+        dict | None: 計算結果を含む辞書、または計算不可の場合None。
+            例: {'recent_30min_consumption_kwh': 1.23, 'recent_30min_timestamp': '...'}
+    """
+    if not edt:
+        return None
+
+    try:
+        # 基準日時 (6バイト)
+        year = int(edt[0:4], 16)
+        month = int(edt[4:6], 16)
+        day = int(edt[6:8], 16)
+        hour = int(edt[8:10], 16)
+        minute = int(edt[10:12], 16)
+
+        # 収集コマ数 (1バイト)
+        num_frames = int(edt[12:14], 16)
+
+        # 消費量を計算するには最低2つのデータポイントが必要
+        if num_frames < 2:
+            logger.info(f"30分消費電力の計算に必要なデータポイントが不足しています (コマ数: {num_frames})")
+            return None
+
+        # データ開始位置 (正方向)
+        data_start_pos = 14
+        
+        # 2つの最新の積算電力量 (4バイトx2)
+        v0_start = data_start_pos
+        v0_end = v0_start + 8
+        v1_start = v0_end
+        v1_end = v1_start + 8
+
+        # データ長チェック
+        if len(edt) < v1_end:
+            logger.warning(f"積算電力量履歴(EC)のデータ長が不足しています: {edt}")
+            return None
+
+        v0_raw = int(edt[v0_start:v0_end], 16)
+        v1_raw = int(edt[v1_start:v1_end], 16)
+
+        # 消費電力量を計算
+        consumption_raw = v0_raw - v1_raw
+        consumption_kwh = consumption_raw * multiplier
+
+        # タイムスタンプを生成 (UTC)
+        naive_dt = datetime(year, month, day, hour, minute, second=0)
+        tz = get_timezone()
+        local_dt = naive_dt.replace(tzinfo=tz)
+        timestamp_str = local_dt.astimezone(timezone.utc).isoformat()
+        
+        # 丸め処理
+        if multiplier < 1:
+            decimals = -int(math.log10(multiplier))
+            consumption_kwh = round(consumption_kwh, decimals)
+            
+        return {
+            'recent_30min_consumption_kwh': consumption_kwh,
+            'recent_30min_timestamp': timestamp_str
+        }
+
+    except (ValueError, TypeError, IndexError) as e:
+        logger.error(f"積算電力量履歴(EC)の解析エラー: {e}, データ: {edt}")
+        return None
