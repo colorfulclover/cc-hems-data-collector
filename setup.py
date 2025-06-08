@@ -35,9 +35,9 @@ setup(
     install_requires=[
         "pyserial>=3.5",
         "pyyaml>=6.0",
-        "python-dotenv>=0.19.0",
-        "croniter>=1.3.0",
-        "requests>=2.28.0",
+        "python-dotenv>=1.1.0",
+        "croniter>=6.0.0",
+        "requests>=2.32.0",
     ],
     extras_require={
         "gcloud": ["google-cloud-pubsub>=2.13.0"],
