@@ -180,8 +180,11 @@ def parse_instant_power(hex_value):
 def parse_current_value(hex_value):
     """瞬時電流の16進数値をA単位の辞書に変換します。
 
-    単相の場合は {'current': float}、三相の場合は {'current_r': float, 'current_t': float}
-    の形式で返します。
+    2バイトの符号付き整数として各値を解釈します。
+    R相とT相で構成され、単相2線式の場合はT相に0x7FFEがセットされます。
+    
+    - 三相3線式: {'current_r': float, 'current_t': float}
+    - 単相2線式: {'current': float}
 
     Args:
         hex_value (str): 瞬時電流を示す16進数文字列。
@@ -192,16 +195,26 @@ def parse_current_value(hex_value):
     if not hex_value:
         return None
     try:
-        # 三相3線式の場合 (4バイト = 8文字)
+        # 三相3線式 or 単相2線式 (4バイト = 8文字)
         if len(hex_value) == 8:
-            # 2バイトずつ(符号付き)に分割して10で割る
-            r_phase = _parse_signed_hex(hex_value[0:4]) / 10.0
-            t_phase = _parse_signed_hex(hex_value[4:8]) / 10.0
-            return {'current_r': r_phase, 'current_t': t_phase}
-        # 単相2線式の場合 (2バイト = 4文字)
+            r_phase_hex = hex_value[0:4]
+            t_phase_hex = hex_value[4:8]
+
+            # T相が 0x7FFE (未定義) の場合は単相2線式として扱う
+            if t_phase_hex.upper() == '7FFE':
+                current_value = _parse_signed_hex(r_phase_hex) / 10.0
+                return {'current': current_value}
+            else:
+                # 通常の三相3線式
+                r_phase = _parse_signed_hex(r_phase_hex) / 10.0
+                t_phase = _parse_signed_hex(t_phase_hex) / 10.0
+                return {'current_r': r_phase, 'current_t': t_phase}
+        
+        # (下位互換性のため残すが、通常は4バイトで送られる想定)
         elif len(hex_value) == 4:
-            current_value = _parse_signed_hex(hex_value) / 10.0  # 単位はA
+            current_value = _parse_signed_hex(hex_value) / 10.0
             return {'current': current_value}
+        
         else:
             logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")
             return None
