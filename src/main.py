@@ -19,6 +19,7 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.config import (
+    VERSION,
     DEFAULT_DATA_FILE, GCP_PROJECT_ID, GCP_TOPIC_NAME,
     SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE, DEFAULT_INTERVAL,
     DEFAULT_WEBHOOK_URL
@@ -94,6 +95,10 @@ def parse_args():
     parser.add_argument('--debug', action='store_true',
                         help='デバッグモードを有効化（詳細なログを出力）')
     
+    # バージョン情報
+    parser.add_argument('--version', '-v', action='version', version=f'%(prog)s {VERSION}',
+                        help='バージョン情報を表示して終了します')
+
     return parser.parse_args()
 
 

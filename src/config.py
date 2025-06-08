@@ -9,6 +9,10 @@ ECHONET Lite関連の定数など、アプリケーション全体で共有さ�
 """
 import os
 import logging
+from dotenv import load_dotenv
+
+# .envファイルから環境変数を読み込む
+load_dotenv()
 
 # ロギング設定
 logging.basicConfig(
@@ -16,6 +20,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# アプリケーションのバージョン
+VERSION = "0.1.0"
 
 # シリアル通信設定
 SERIAL_PORT = os.environ.get('SERIAL_PORT', '/dev/ttyUSB0')  # USBトングルのシリアルポート（環境に合わせて変更）

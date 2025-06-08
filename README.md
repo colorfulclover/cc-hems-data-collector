@@ -144,6 +144,7 @@ python hems_data_collector.py --output gcloud
 | `--schedule` | `-s` | データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` (5分ごと) |
 | `--interval` | `-i` | データ取得間隔（秒）。`interval`モードで有効。 | `300` |
 | `--debug` | | デバッグモードを有効化（詳細なログを出力）。 | `False` |
+| `--version` | `-v` | バージョン情報を表示して終了します。 | - |
 
 
 ---
