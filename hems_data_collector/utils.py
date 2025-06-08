@@ -161,13 +161,16 @@ def _parse_signed_hex(hex_str: str) -> int:
 def parse_instant_power(hex_value):
     """瞬時電力の16進数値をW単位の整数に変換します。
     
+    4バイトの符号付き整数として解釈します。
+
     Args:
-        hex_value (str): 瞬時電力を示す16進数文字列。
+        hex_value (str): 瞬時電力を示す16進数文字列 (4バイト/8文字)。
 
     Returns:
         int | None: 変換後のW値。エラーの場合はNone。
     """
-    if not hex_value:
+    if not hex_value or len(hex_value) != 8:
+        logger.warning(f"瞬時電力の値が不正です(4バイトではありません): {hex_value}")
         return None
     try:
         # 4バイト符号付き整数として解釈
