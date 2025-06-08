@@ -24,8 +24,10 @@ from src.config import (
 )
 from src.serial_client import SmartMeterClient
 from src.output_handler import OutputHandler
+from src.logger_config import setup_logger
 
 logger = logging.getLogger(__name__)
+
 
 def parse_args():
     """コマンドライン引数を解析します。
@@ -127,11 +129,12 @@ def main():
     データ取得のメインループを開始します。
     """
     args = parse_args()
+    
+    # ロギングを設定
+    setup_logger(args.debug)
     logger.info("hems_data_collector を起動します")
     
-    # ログレベルの設定
     if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
         logger.info("デバッグモードが有効になりました")
     
     # 出力ハンドラの作成
