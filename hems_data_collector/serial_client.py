@@ -457,7 +457,7 @@ class SmartMeterClient:
             if hex_value:
                 power_value = parse_cumulative_power(hex_value, power_multiplier)
                 if power_value is not None:
-                    data['cumulative_power'] = power_value
+                    data['cumulative_power_kwh'] = power_value
                     logger.info(f"積算電力量: {power_value} kWh (単位乗数: {power_multiplier})")
             
             # 瞬時電力計測値の取得
@@ -467,7 +467,7 @@ class SmartMeterClient:
             if hex_value:
                 power_value = parse_instant_power(hex_value)
                 if power_value is not None:
-                    data['instant_power'] = power_value
+                    data['instant_power_w'] = power_value
                     logger.info(f"瞬時電力: {power_value} W")
             
             # 瞬時電流計測値の取得
