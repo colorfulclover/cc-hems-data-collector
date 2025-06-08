@@ -1,9 +1,8 @@
 # src/main.py
 """HEMSデータ収集アプリケーションのメインモジュール。
 
-コマンドライン引数の解析、ロギング設定、出力ハンドラのセットアップ、
-そしてスマートメータークライアントの初期化とデータ取得ループの実行を
-担当します。
+コマンドライン引数を解釈し、ロギングを設定し、
+SmartMeterClientを初期化してデータ取得プロセスを開始します。
 """
 import time
 import logging
@@ -11,14 +10,17 @@ import argparse
 import traceback
 import os
 import sys
+import os
+from datetime import datetime
+from croniter import croniter
 
 # srcディレクトリへのパスを追加（直接実行時のみ必要）
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.config import (
-    DEFAULT_DATA_FILE, DEFAULT_INTERVAL, PROJECT_ID, TOPIC_NAME,
-    SERIAL_PORT, SERIAL_RATE
+    DEFAULT_DATA_FILE, PROJECT_ID, GCP_TOPIC_NAME,
+    SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE
 )
 from src.serial_client import SmartMeterClient
 from src.output_handler import OutputHandler
@@ -48,18 +50,25 @@ def parse_args():
     # Google Cloud Pub/Sub設定
     parser.add_argument('--project', default=PROJECT_ID, 
                         help=f'Google Cloudプロジェクト (デフォルト: {PROJECT_ID})')
-    parser.add_argument('--topic', default=TOPIC_NAME, 
-                        help=f'Pub/Subトピック名 (デフォルト: {TOPIC_NAME})')
+    parser.add_argument('--topic', default=GCP_TOPIC_NAME, 
+                        help=f'Pub/Subトピック名 (デフォルト: {GCP_TOPIC_NAME})')
     
     # シリアルポート設定
     parser.add_argument('--port', default=SERIAL_PORT, 
                         help=f'シリアルポート (デフォルト: {SERIAL_PORT})')
     parser.add_argument('--baudrate', type=int, default=SERIAL_RATE, 
                         help=f'ボーレート (デフォルト: {SERIAL_RATE})')
+
+    # スマートメーター情報
+    parser.add_argument('--meter-channel', type=str, help='スマートメーターのチャンネル')
+    parser.add_argument('--meter-panid', type=str, help='スマートメーターのPAN ID')
+    parser.add_argument('--meter-ipv6', type=str, help='スマートメーターのIPv6アドレス')
     
-    # 間隔設定
-    parser.add_argument('--interval', '-i', type=int, default=DEFAULT_INTERVAL, 
-                        help=f'データ取得間隔（秒） (デフォルト: {DEFAULT_INTERVAL})')
+    # スケジュール設定
+    parser.add_argument(
+        '--schedule', '-s', type=str, default=DEFAULT_SCHEDULE,
+        help=f'データ取得スケジュール（crontab形式, デフォルト: "{DEFAULT_SCHEDULE}")'
+    )
     
     # ログレベル設定
     parser.add_argument('--debug', action='store_true',
@@ -103,10 +112,9 @@ def setup_output_handlers(args):
 
 def main():
     """アプリケーションのメイン実行関数。
-
+    
     引数解析、ロギング設定、出力ハンドラとクライアントの初期化を行い、
     データ取得のメインループを開始します。
-    KeyboardInterruptによる正常終了や、予期せぬエラーのハンドリングも行います。
     """
     args = parse_args()
     
@@ -118,51 +126,78 @@ def main():
     # 出力ハンドラの作成
     output_handlers = setup_output_handlers(args)
     
-    # スマートメータークライアントの作成
-    client = SmartMeterClient(args.port, args.baudrate, output_handlers)
+    client = SmartMeterClient(
+        port=args.port,
+        baudrate=args.baudrate,
+        output_handlers=output_handlers,
+        meter_channel=args.meter_channel,
+        meter_pan_id=args.meter_panid,
+        meter_ipv6_addr=args.meter_ipv6
+    )
     
     try:
         # 出力スレッドを開始
         client.start_output_thread()
         
         # 初期化とスマートメーターへの接続
-        if client.initialize():
-            logger.info("スマートメーターへの接続に成功しました")
+        if not client.initialize():
+            logger.error("初期化に失敗しました。プログラムを終了します。")
+            return
+        
+        base_time = datetime.now()
+        try:
+            cron = croniter(args.schedule, base_time)
+            logger.info(f"スケジュール '{args.schedule}' で実行します。")
+        except ValueError as e:
+            logger.error(f"不正なcron形式のスケジュールです: {args.schedule} - {e}")
+            return
+
+        # 定期的にデータを取得
+        while client.running:
+            # 次の実行時刻まで待機
+            next_run_datetime = cron.get_next(datetime)
+            wait_seconds = (next_run_datetime - datetime.now()).total_seconds()
             
-            # 定期的にデータを取得
-            while True:
-                try:
-                    # データ取得
-                    meter_data = client.get_meter_data()
-                    
-                    if meter_data:
-                        # データキューに追加
-                        client.data_queue.put(meter_data)
-                        logger.info(f"データを取得しました: {meter_data}")
-                    else:
-                        logger.warning("データが取得できませんでした")
-                    
-                    # 指定間隔待機
-                    logger.info(f"{args.interval}秒後に再度データを取得します...")
-                    time.sleep(args.interval)
-                    
-                except KeyboardInterrupt:
+            if wait_seconds > 0:
+                logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S')} です。({wait_seconds:.1f}秒後)")
+                
+                sleep_end = time.time() + wait_seconds
+                while time.time() < sleep_end:
+                    if not client.running:
+                        # スリープ中に停止した場合、ループを抜ける
+                        break
+                    time.sleep(min(1, sleep_end - time.time()))
+
+            # client.running の状態を再チェック
+            if not client.running:
+                logger.info("クライアントが停止しました。")
+                break
+
+            # データ取得
+            try:
+                # データ取得
+                meter_data = client.get_meter_data()
+                if meter_data:
+                     # データキューに追加
+                    client.data_queue.put(meter_data)
+                    logger.info(f"データを取得しました: {meter_data}")
+                else:
+                    logger.info("データが取得できませんでした。")
+                
+            except KeyboardInterrupt:
                     raise
-                except Exception as e:
-                    logger.error(f"データ取得中にエラーが発生しました: {e}")
-                    time.sleep(60)  # エラー時は1分待機
-        else:
-            logger.error("スマートメーターへの接続に失敗しました")
-    
+            except Exception as e:
+                logger.error(f"データ取得中にエラーが発生しました: {e}")
+
     except KeyboardInterrupt:
-        logger.info("プログラムを終了します")
+        logger.info("プログラムを終了します...")
     except Exception as e:
-        logger.error(f"予期せぬエラーが発生しました: {e}")
+        logger.error(f"予期せぬエラーが発生しました: {e}", exc_info=True)
         traceback.print_exc()
     finally:
         client.stop_output_thread()
         client.close_connection()
-        logger.info("プログラムを終了しました")
+        logger.info("クリーンアップを完了し、プログラムを終了しました。")
 
 
 if __name__ == "__main__":

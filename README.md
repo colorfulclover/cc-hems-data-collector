@@ -138,10 +138,10 @@ python hems_data_collector.py --output cloud
 | `--topic` | Pub/Subトピック名。 | (環境変数またはconfig値) |
 | `--port` | シリアルポート。 | (環境変数またはconfig値) |
 | `--baudrate`| ボーレート。 | (環境変数またはconfig値) |
-| `--meter-channel`| スマートメーターのチャンネル。 | `33` |
-| `--meter-panid`| スマートメーターのPAN ID。 | `0000` |
-| `--meter-ipv6`| スマートメーターのIPv6アドレス。 | `FE80...` |
-| `-i`, `--interval`| データ取得間隔（秒）。 | `300` |
+| `--meter-channel`| スマートメーターのチャンネル。 | (自動スキャン) |
+| `--meter-panid`| スマートメーターのPAN ID。 | (自動スキャン) |
+| `--meter-ipv6`| スマートメーターのIPv6アドレス。 | (自動スキャン) |
+| `-s`, `--schedule`| データ取得スケジュール（crontab形式）。 | `*/5 * * * *` |
 | `--debug` | デバッグモードを有効化（詳細ログ出力）。 | `False` |
 
 

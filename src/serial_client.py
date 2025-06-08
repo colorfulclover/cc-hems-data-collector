@@ -42,7 +42,8 @@ class SmartMeterClient:
         output_thread (threading.Thread): 出力処理を行うワーカースレッド。
         running (bool): スレッドの実行状態を制御するフラグ。
     """
-    def __init__(self, port=SERIAL_PORT, baudrate=SERIAL_RATE, output_handlers=None):
+    def __init__(self, port=SERIAL_PORT, baudrate=SERIAL_RATE, output_handlers=None,
+                 meter_channel=None, meter_pan_id=None, meter_ipv6_addr=None):
         """SmartMeterClientを初期化します。
 
         Args:
@@ -52,12 +53,17 @@ class SmartMeterClient:
                 Defaults to SERIAL_RATE.
             output_handlers (list, optional): データ出力ハンドラのリスト。
                 Defaults to None.
+            meter_channel (str, optional): スマートメーターのチャンネル。指定しない場合はスキャン。
+            meter_pan_id (str, optional): スマートメーターのPAN ID。指定しない場合はスキャン。
+            meter_ipv6_addr (str, optional): スマートメーターのIPv6アドレス。指定しない場合はスキャン。
         """
         self.port = port
         self.baudrate = baudrate
         self.ser = None
         self.connected = False
-        self.ipv6_addr = None
+        self.ipv6_addr = meter_ipv6_addr
+        self.meter_channel = meter_channel
+        self.meter_pan_id = meter_pan_id
         self.output_handlers = output_handlers or []
         self.data_queue = Queue()
         self.output_thread = None
@@ -168,7 +174,7 @@ class SmartMeterClient:
             return False
         
         # スキャンモードをアクティブに設定
-        logger.info("BP35A1の初期化を開始...")
+        logger.info("初期化を開始...")
         
         # バージョン情報の取得
         version_response = self.send_command("SKVER")
@@ -178,49 +184,63 @@ class SmartMeterClient:
                 if line.startswith("EVER"):
                     bp35a1_version = line
                     break
-        logger.info(f"BP35A1バージョン: {bp35a1_version.strip()}")
+        logger.info(f"FW バージョン: {bp35a1_version.strip()}")
         
         # Bルート認証情報の設定
         logger.info("Bルート認証情報を設定...")
         self.send_command(f"SKSETRBID {B_ROUTE_ID}")
         self.send_command(f"SKSETPWD C {B_ROUTE_PASSWORD}")
         
-        # ネットワークスキャンの実行
-        logger.info(f"ネットワークスキャンを実行中...")
-        response = self.send_command(f"SKSCAN 2 FFFFFFFF 6", wait_time=10)
-        
-        # スキャン結果からPANアドレスを取得
-        pan_addr_match = re.search(r'Addr:([0-9A-F]{16})', response)
-        if not pan_addr_match:
-            logger.error("PANデスクリプタが見つかりませんでした")
-            return False
+        # チャンネル、PAN ID、IPv6アドレスが指定されているかチェック
+        if self.meter_channel and self.meter_pan_id and self.ipv6_addr:
+            logger.info("指定された情報を使用して接続を試みます...")
+            logger.info(f"チャンネルを {self.meter_channel} に設定...")
+            self.send_command(f"SKSREG S2 {self.meter_channel}")
             
-        pan_addr = pan_addr_match.group(1)
-        logger.info(f"見つかったPANアドレス: {pan_addr}")
+            logger.info(f"PAN IDを {self.meter_pan_id} に設定...")
+            self.send_command(f"SKSREG S3 {self.meter_pan_id}")
+            
+            # この場合、self.ipv6_addr は初期化時に設定済み
+            logger.info(f"IPv6アドレス: {self.ipv6_addr}")
 
-        # PANアドレスをIPV6アドレスに変換
-        logger.info(f"PANアドレス: {pan_addr} をIPV6アドレスに変換...")
-        ipv6_addr_response = self.send_command(f"SKLL64 {pan_addr}")
-        ipv6_addr_match = re.search(r'([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7})', ipv6_addr_response)
-        if not ipv6_addr_match:
-            logger.error("IPV6アドレスが見つかりませんでした")
-            return False
-        self.ipv6_addr = ipv6_addr_match.group(1)
-        logger.info(f"IPV6アドレス: {self.ipv6_addr}")
-        
-        # チャンネルを設定
-        channel_match = re.search(r'Channel:([0-9A-F]{2})', response)
-        if channel_match:
-            channel = channel_match.group(1)
-            logger.info(f"チャンネルを {channel} に設定...")
-            self.send_command(f"SKSREG S2 {channel}")
-        
-        # PANIDを設定
-        pan_id_match = re.search(r'Pan ID:([0-9A-F]{4})', response)
-        if pan_id_match:
-            pan_id = pan_id_match.group(1)
-            logger.info(f"PANIDを {pan_id} に設定...")
-            self.send_command(f"SKSREG S3 {pan_id}")
+        else:
+            logger.info("接続情報をスキャンで取得します...")
+            # ネットワークスキャンの実行
+            logger.info(f"ネットワークスキャンを実行中...")
+            response = self.send_command(f"SKSCAN 2 FFFFFFFF 6", wait_time=10)
+            
+            # スキャン結果からPANアドレスを取得
+            pan_addr_match = re.search(r'Addr:([0-9A-F]{16})', response)
+            if not pan_addr_match:
+                logger.error("PANデスクリプタが見つかりませんでした")
+                return False
+                
+            pan_addr = pan_addr_match.group(1)
+            logger.info(f"見つかったPANアドレス: {pan_addr}")
+
+            # PANアドレスをIPV6アドレスに変換
+            logger.info(f"PANアドレス: {pan_addr} をIPV6アドレスに変換...")
+            ipv6_addr_response = self.send_command(f"SKLL64 {pan_addr}")
+            ipv6_addr_match = re.search(r'([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7})', ipv6_addr_response)
+            if not ipv6_addr_match:
+                logger.error("IPV6アドレスが見つかりませんでした")
+                return False
+            self.ipv6_addr = ipv6_addr_match.group(1)
+            logger.info(f"IPV6アドレス: {self.ipv6_addr}")
+            
+            # チャンネルを設定
+            channel_match = re.search(r'Channel:([0-9A-F]{2})', response)
+            if channel_match:
+                channel = channel_match.group(1)
+                logger.info(f"チャンネルを {channel} に設定...")
+                self.send_command(f"SKSREG S2 {channel}")
+            
+            # PANIDを設定
+            pan_id_match = re.search(r'Pan ID:([0-9A-F]{4})', response)
+            if pan_id_match:
+                pan_id = pan_id_match.group(1)
+                logger.info(f"PANIDを {pan_id} に設定...")
+                self.send_command(f"SKSREG S3 {pan_id}")
         
         # PANAに接続
         logger.info("PANAに接続中...")

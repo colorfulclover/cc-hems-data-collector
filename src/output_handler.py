@@ -12,7 +12,7 @@ try:
 except ImportError:
     PUBSUB_AVAILABLE = False
 
-from src.config import CSV_HEADERS, PROJECT_ID, TOPIC_NAME
+from src.config import CSV_HEADERS, PROJECT_ID, GCP_TOPIC_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class OutputHandler:
         self.output_format = output_format
         self.file_path = file_path
         self.pubsub_project = pubsub_project or PROJECT_ID
-        self.pubsub_topic = pubsub_topic or TOPIC_NAME
+        self.pubsub_topic = pubsub_topic or GCP_TOPIC_NAME
         self.pubsub_publisher = None
         
         # Google Cloud Pub/Sub初期化（必要な場合）
