@@ -11,7 +11,7 @@ import yaml
 import requests
 from datetime import datetime
 
-from src.config import CSV_HEADERS
+from hems_data_collector.config import CSV_HEADERS
 
 logger = logging.getLogger(__name__)
 

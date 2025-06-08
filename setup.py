@@ -7,9 +7,9 @@
 import os
 from setuptools import setup, find_packages
 
-# src/config.py からバージョンを読み込む
+# hems_data_collector/config.py からバージョンを読み込む
 def get_version():
-    version_filepath = os.path.join(os.path.dirname(__file__), 'src', 'config.py')
+    version_filepath = os.path.join(os.path.dirname(__file__), 'hems_data_collector', 'config.py')
     with open(version_filepath) as f:
         for line in f:
             if line.startswith('VERSION'):
@@ -30,8 +30,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/colorfulclover/cc-hems-data-collector",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=find_packages(),
     install_requires=[
         "pyserial>=3.5",
         "pyyaml>=6.0",
@@ -44,7 +43,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "hems-data-collector=main:main",
+            "hems-data-collector=hems_data_collector.main:main",
         ],
     },
     classifiers=[

@@ -13,11 +13,11 @@ import traceback
 from queue import Queue, Empty
 import threading
 
-from src.config import (
+from hems_data_collector.config import (
     SERIAL_PORT, SERIAL_RATE, B_ROUTE_ID, B_ROUTE_PASSWORD, 
     ECHONET_PROPERTY_CODES
 )
-from src.utils import (
+from hems_data_collector.utils import (
     parse_echonet_response, parse_cumulative_power,
     parse_instant_power, parse_current_value, get_current_timestamp,
     parse_echonet_frame

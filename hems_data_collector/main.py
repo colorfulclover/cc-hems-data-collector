@@ -8,25 +8,18 @@ import time
 import logging
 import argparse
 import traceback
-import os
-import sys
-import os
 from datetime import datetime, timezone
 from croniter import croniter
 
-# srcディレクトリへのパスを追加（直接実行時のみ必要）
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from src.config import (
+from hems_data_collector.config import (
     VERSION,
     DEFAULT_DATA_FILE, GCP_PROJECT_ID, GCP_TOPIC_NAME,
     SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE, DEFAULT_INTERVAL,
     DEFAULT_WEBHOOK_URL
 )
-from src.serial_client import SmartMeterClient
-from src.output_handler import OutputHandler
-from src.logger_config import setup_logger
+from hems_data_collector.serial_client import SmartMeterClient
+from hems_data_collector.output_handler import OutputHandler
+from hems_data_collector.logger_config import setup_logger
 
 logger = logging.getLogger(__name__)
 

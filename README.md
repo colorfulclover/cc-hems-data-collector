@@ -1,169 +1,144 @@
-# HEMS Data Collector for Smart Meter
+# HEMS Data Collector
 
-スマートメーターからECHONET Liteプロトコルを使用して電力消費量データを取得し、リアルタイムで出力するためのPython製クライアントツールです。
-Wi-SUNモジュール（BP35A1など）を搭載したUSBドングルを介してスマートメーターと通信します。
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
 
-## 概要
-
-このツールは、家庭の電力使用状況を把握・分析したい開発者や研究者、ホビイストを対象としています。
-スマートメーターから取得したデータを、標準出力、ファイル、またはGoogle Cloud Pub/Subへ柔軟に出力することができ、Home Energy Management System (HEMS) のデータ収集基盤として利用できます。
+`hems-data-collector`は、スマートメーター（HEMS）からBルート経由で電力データを収集し、指定された形式と先に出力するためのPython製ツールです。
 
 ## 主な機能
 
-- **スマートメーターからのデータ取得**:
-  - 積算電力量 (kWh)
-  - 瞬時電力 (W)
-  - 瞬時電流 (R相, T相)
-- **柔軟な出力先**:
-  - 標準出力 (stdout)
-  - ファイル (JSON, YAML, CSV)
-  - Google Cloud Pub/Sub
-- **豊富な設定オプション**:
-  - コマンドライン引数と環境変数の両方で設定可能
-  - データ取得間隔、シリアルポート、Bルート認証情報などを指定可能
-- **堅牢な接続処理**:
-  - ネットワークスキャンによる最適なチャンネル・PANの自動設定
-  - PANAセッションの自動再接続機能
+- **データ取得**: Wi-SUNモジュールを介してスマートメーターに接続し、瞬時電力、積算電力量、瞬時電流などを定期的に取得します。
+- **柔軟な実行タイミング**: cronライクなスケジュール実行 (`schedule` モード)と、固定間隔での実行 (`interval` モード)をサポートします。
+- **多様な出力先**: 取得したデータは、標準出力、ファイル、Google Cloud Pub/Sub、Webhookに送信できます。複数の出力先を同時に指定することも可能です。
+- **選べる出力形式**: 出力データは `json`, `yaml`, `csv` から選択できます。
+- **設定の柔軟性**: 主な設定は環境変数またはコマンドライン引数で行うことができ、柔軟な運用が可能です。
 
-## 動作要件
+## 動作環境
 
-- Python 3.9以上
-- Wi-SUN USBドングル (例: [ローム BP35A1](https://www.rohm.co.jp/products/wireless-communication/sub-ghz-wireless-modules/bp35a1-product))
-- スマートメーター (Bルートサービス対応)
-- Bルート認証ID・パスワード (契約している電力会社から取得)
+- Python 3.11 以上
+- Wi-SUN通信モジュール（例: [RL7023 Stick-D/IPS](https://www.tessera.co.jp/product/rfmodul/rl7023stick-d_ips.html)）
 
----
+## 前提条件
+
+- **Git**: ソースコードをクローンするために必要です。
+- **Python 3.11以上およびPip**: プロジェクトの実行と依存関係の管理に必要です。
+- **シリアルポートへのアクセス権 (Linuxの場合)**:
+  Wi-SUNモジュールが接続されたシリアルポートにアクセスするために、ユーザーが `dialout` グループに所属している必要があります。所属していない場合は、以下のコマンドで追加してください。
+  ```bash
+  sudo usermod -aG dialout $USER
+  ```
+  このコマンドを実行した後は、一度ログアウトしてから再度ログインする必要があります。
 
 ## インストール
 
-### 1. リポジトリのクローン
-```bash
-git clone https://github.com/your-username/cc-hems-data-collector.git
-cd cc-hems-data-collector
-```
+1.  リポジトリをクローンします。
+    ```bash
+    git clone https://github.com/colorfulclover/cc-hems-data-collector.git
+    cd cc-hems-data-collector
+    ```
 
-### 2. 仮想環境のセットアップ (推奨)
-```bash
-python3 -m venv venv
-source venv/bin/activate
-# Windowsの場合: venv\\Scripts\\activate
-```
+2.  Pythonの仮想環境を作成し、有効化します。（推奨）
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
 
-### 3. 依存関係のインストール
-```bash
-pip install -r requirements.txt
-```
-Google Cloud Pub/Subへ出力する場合は、追加でライブラリをインストールします。
-```bash
-pip install google-cloud-pubsub
-```
-
----
+3.  依存パッケージをインストールします。
+    ```bash
+    pip install -e .
+    ```
+    Google Cloud Pub/Subへの出力機能を使用する場合は、追加で以下をインストールしてください。
+    ```bash
+    pip install -e '.[gcloud]'
+    ```
 
 ## 設定
 
-アプリケーションの動作は、環境変数またはコマンドライン引数で設定できます。両方が指定された場合は、コマンドライン引数が優先されます。
+アプリケーションの動作は、主に環境変数で設定します。プロジェクトルートに `.env` ファイルを作成して設定値を記述するか、実行環境で直接環境変数を設定してください。
 
-### 環境変数 (推奨)
+### `.env` ファイルの例
 
-以下の環境変数を設定することで、認証情報などを安全に管理できます。
+```env
+# Wi-SUNモジュール設定
+SERIAL_PORT=/dev/ttyUSB0
+SERIAL_RATE=115200
 
-| 変数名 | 説明 | デフォルト値 |
-|:--- |:--- |:--- |
-| `B_ROUTE_ID` | 電力会社から提供されるBルート認証ID。 | (なし) |
-| `B_ROUTE_PASSWORD` | 電力会社から提供されるBルートパスワード。 | (なし) |
-| `SERIAL_PORT` | Wi-SUNドングルが接続されているシリアルポート。 | `/dev/ttyUSB0` |
-| `SERIAL_RATE` | シリアルポートのボーレート。 | `115200` |
-| `GCP_PROJECT_ID` | Google Cloud Pub/Sub出力用のプロジェクトID。 | `your-project-id` |
-| `GCP_TOPIC_NAME` | Google Cloud Pub/Sub出力用のトピック名。 | `hems-data` |
+# Bルート認証情報
+B_ROUTE_ID=YOUR_B_ROUTE_ID
+B_ROUTE_PASSWORD=YOUR_B_ROUTE_PASSWORD
 
-`.env`ファイルを使用する場合は、以下のように起動します。
-```bash
-# export $(cat .env | xargs) && python hems_data_collector.py
+# Google Cloud Pub/Sub 設定 (必要な場合)
+GCP_PROJECT_ID=your-gcp-project-id
+GCP_TOPIC_NAME=hems-data
+
+# Webhook 設定 (必要な場合)
+WEBHOOK_URL=http://your-server.com/webhook
 ```
 
----
+### 環境変数一覧
+
+| 環境変数 | 説明 | デフォルト値 |
+|:--- |:--- |:--- |
+| `SERIAL_PORT` | Wi-SUNモジュールが接続されているシリアルポート。 | `/dev/ttyUSB0` |
+| `SERIAL_RATE` | シリアルポートのボーレート。 | `115200` |
+| `B_ROUTE_ID` | Bルートの認証ID。 | `00000000000000000000000000000000` |
+| `B_ROUTE_PASSWORD` | Bルートのパスワード。 | `00000000000000000000000000000000` |
+| `GCP_PROJECT_ID` | Google CloudプロジェクトID。 | `your-project-id` |
+| `GCP_TOPIC_NAME` | Google Cloud Pub/Subのトピック名。 | `hems-data` |
+| `WEBHOOK_URL` | Webhookの送信先URL。 | `http://localhost:8000/webhook` |
 
 ## 使い方
 
-プロジェクトのルートディレクトリから`hems_data_collector.py`を実行します。
+`hems-data-collector` はコマンドラインから実行します。
 
-### 基本的な実行
+### 基本的なコマンド
 
-`--output`オプションを指定しない場合、取得したデータはログとして標準エラーに出力されるのみで、ファイル等への書き出しは行われません。
 ```bash
-python hems_data_collector.py
+hems-data-collector [OPTIONS]
 ```
 
-### 出力例
+### 実行例
 
-**JSON形式で標準出力する**
-```bash
-python hems_data_collector.py --output stdout --format json
-```
-出力サンプル:
-```json
-{"timestamp": "2023-10-27T10:00:00.123456", "cumulative_power": 12345.6, "instant_power": 500, "current_r": 2.5, "current_t": 2.5}
-```
+- **標準出力にJSON形式で出力する (スケジュール実行)**
+  ```bash
+  hems-data-collector --output stdout --format json
+  ```
 
-**CSV形式でファイルに出力する**
-```bash
-python hems_data_collector.py --output file --format csv --file power_data.csv
-```
-`power_data.csv` の内容:
-```csv
-timestamp,cumulative_power_kwh,instant_power_w,current_r_a,current_t_a
-2023-10-27T10:00:00.123456,12345.6,500,2.5,2.5
-2023-10-27T10:05:00.456789,12345.7,550,2.7,2.8
-```
+- **30秒間隔でファイルとWebhookに出力する**
+  ```bash
+  hems-data-collector --mode interval --interval 30 --output file webhook --file data.csv --format csv
+  ```
+- **Google Cloud Pub/Sub に5分ごとに出力する**
+  ```bash
+  hems-data-collector --output gcloud --schedule "*/5 * * * *"
+  ```
 
-**Google Cloud Pub/Sub へ出力する**
-```bash
-python hems_data_collector.py --output gcloud
-```
-(事前に`GCP_PROJECT_ID`と`GCP_TOPIC_NAME`環境変数の設定、または`gcloud auth application-default login`での認証が必要です)
-
+- **デバッグログを有効にして実行**
+  ```bash
+  hems-data-collector --output stdout --debug
+  ```
 
 ### コマンドラインオプション
 
 | オプション | 短縮形 | 説明 | デフォルト値 |
 |:--- |:--- |:--- |:--- |
 | `--help` | `-h` | ヘルプメッセージを表示します。 | - |
+| `--version` | `-v` | バージョン情報を表示して終了します。 | - |
 | `--output` | `-o` | 出力タイプ (`stdout`, `file`, `gcloud`, `webhook`)。複数指定可。 | `None` (ログ出力のみ) |
 | `--format` | `-f` | 出力フォーマット (`json`, `yaml`, `csv`)。 | `json` |
 | `--file` | | ファイル出力時のパス。 | `hems_data.dat` |
-| `--gcp-project` | | Google CloudプロジェクトID。 | 環境変数 `GCP_PROJECT_ID` |
-| `--gcp-topic` | | Google Cloud Pub/Subトピック名。 | 環境変数 `GCP_TOPIC_NAME` |
-| `--webhook-url` | | Webhookの送信先URL。 | 環境変数 `WEBHOOK_URL` |
-| `--port` | | Wi-SUNモジュールが接続されているシリアルポート。 | 環境変数 `SERIAL_PORT` |
-| `--baudrate` | | シリアルポートのボーレート。 | 環境変数 `SERIAL_RATE` |
+| `--gcp-project` | | Google CloudプロジェクトID。 | (環境変数 `GCP_PROJECT_ID`の値) |
+| `--gcp-topic` | | Google Cloud Pub/Subトピック名。 | (環境変数 `GCP_TOPIC_NAME`の値) |
+| `--webhook-url` | | Webhookの送信先URL。 | (環境変数 `WEBHOOK_URL`の値) |
+| `--port` | | Wi-SUNモジュールが接続されているシリアルポート。 | (環境変数 `SERIAL_PORT`の値) |
+| `--baudrate` | | シリアルポートのボーレート。 | (環境変数 `SERIAL_RATE`の値) |
 | `--meter-channel` | | スマートメーターのチャンネル。指定するとスキャンを省略。 | `None` |
 | `--meter-panid` | | スマートメーターのPAN ID。指定するとスキャンを省略。 | `None` |
 | `--meter-ipv6` | | スマートメーターのIPv6アドレス。指定するとスキャンを省略。 | `None` |
 | `--mode` | | 実行モード (`schedule` または `interval`)。 | `schedule` |
-| `--schedule` | `-s` | データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` (5分ごと) |
+| `--schedule` | `-s` | データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` |
 | `--interval` | `-i` | データ取得間隔（秒）。`interval`モードで有効。 | `300` |
 | `--debug` | | デバッグモードを有効化（詳細なログを出力）。 | `False` |
-| `--version` | `-v` | バージョン情報を表示して終了します。 | - |
-
-
----
-
-## トラブルシューティング
-
-- **接続できない**:
-  - Wi-SUNドングルがPCに正しく認識されているか確認してください (`dmesg | grep tty`など)。
-  - `--port`で正しいシリアルポートを指定しているか確認してください。
-  - シリアルポートへのアクセス権限があるか確認してください (例: `sudo usermod -aG dialout $USER`)。
-- **データ取得に失敗する (`FAIL ER04`など)**:
-  - BルートID/パスワードが正しいか確認してください。
-  - ドングルとスマートメーターの距離や、間の障害物など、電波環境を確認してください。
-  - `--debug`オプションを付けて実行し、詳細なエラーログを確認してください。
 
 ## ライセンス
 
-このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
-
-## 貢献
-
-プルリクエストは歓迎します。大きな変更を加える前には、まずissueを作成して議論してください。
+このプロジェクトはMITライセンスの下で公開されています。詳細は `LICENSE` ファイルをご覧ください。
