@@ -107,10 +107,12 @@ class OutputHandler:
             
             row_data = [
                 str(data.get('timestamp', '')),
-                str(data.get('cumulative_power', '')),
-                str(data.get('instant_power', '')),
+                str(data.get('cumulative_power_kwh', '')),
+                str(data.get('instant_power_w', '')),
                 str(data.get('current_r', '')),
-                str(data.get('current_t', ''))
+                str(data.get('current_t', '')),
+                str(data.get('historical_timestamp', '')),
+                str(data.get('historical_cumulative_power_kwh', ''))
             ]
             return ','.join(row_data)
         return None

@@ -20,7 +20,7 @@ from hems_data_collector.config import (
 from hems_data_collector.utils import (
     parse_echonet_response, parse_cumulative_power, parse_power_unit,
     parse_instant_power, parse_current_value, get_current_timestamp,
-    parse_echonet_frame
+    parse_echonet_frame, parse_historical_power
 )
 
 logger = logging.getLogger(__name__)
@@ -483,6 +483,16 @@ class SmartMeterClient:
                     else:
                         logger.info(f"瞬時電流: R相={current_data['current_r']}A, T相={current_data['current_t']}A")
             
+            # 定時積算電力量計測値(EA)の取得
+            logger.info("定時積算電力量を要求中...")
+            response = self.get_property(ECHONET_PROPERTY_CODES['HISTORICAL_CUMULATIVE_POWER'], 5)
+            hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['HISTORICAL_CUMULATIVE_POWER'])
+            if hex_value:
+                historical_data = parse_historical_power(hex_value, power_multiplier)
+                if historical_data:
+                    data.update(historical_data)
+                    logger.info(f"定時積算電力量: {historical_data['historical_cumulative_power_kwh']} kWh ({historical_data['historical_timestamp']})")
+
             return data if len(data) > 1 else None  # タイムスタンプ以外のデータがある場合のみ返す
             
         except Exception as e:

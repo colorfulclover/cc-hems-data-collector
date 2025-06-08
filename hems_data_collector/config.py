@@ -50,9 +50,18 @@ DEFAULT_WEBHOOK_URL = "http://localhost:8000/webhook"
 ECHONET_PROPERTY_CODES = {
     'CUMULATIVE_POWER': "E0",  # 積算電力量計測値
     'CUMULATIVE_POWER_UNIT': "E1", # 積算電力量単位
+    'HISTORICAL_CUMULATIVE_POWER': "EA", # 定時積算電力量計測値
     'INSTANT_POWER': "E7",     # 瞬時電力計測値
     'CURRENT_VALUE': "E8",     # 瞬時電流計測値
 }
 
 # CSV出力用ヘッダー
-CSV_HEADERS = ['timestamp', 'cumulative_power_kwh', 'instant_power_w', 'current_r_a', 'current_t_a']
+CSV_HEADERS = [
+    'timestamp', 
+    'cumulative_power_kwh', 
+    'instant_power_w', 
+    'current_r_a', 
+    'current_t_a',
+    'historical_timestamp',
+    'historical_cumulative_power_kwh'
+]

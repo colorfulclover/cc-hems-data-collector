@@ -258,3 +258,49 @@ def parse_current_value(hex_value):
     except (ValueError, TypeError):
         logger.error(f"瞬時電流の解析エラー: {hex_value}")
         return None
+
+def parse_historical_power(hex_value, multiplier=1.0):
+    """定時積算電力量(EA)の16進数値を辞書に変換します。
+
+    Args:
+        hex_value (str): 定時積算電力量を示す16進数文字列(11バイト/22文字)。
+        multiplier (float, optional): 積算電力量に適用する倍率。Defaults to 1.0.
+
+    Returns:
+        dict | None: 変換後のデータを含む辞書。
+            {'historical_timestamp': str, 'historical_cumulative_power_kwh': float}
+            エラーの場合はNone。
+    """
+    if not hex_value or len(hex_value) != 22:
+        logger.warning(f"定時積算電力量データ長が不正です(11バイトではありません): {hex_value}")
+        return None
+    try:
+        year = int(hex_value[0:4], 16)
+        month = int(hex_value[4:6], 16)
+        day = int(hex_value[6:8], 16)
+        hour = int(hex_value[8:10], 16)
+        minute = int(hex_value[10:12], 16)
+        second = int(hex_value[12:14], 16)
+        
+        power_value_hex = hex_value[14:22]
+        
+        # タイムスタンプを作成
+        historical_dt = datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+        historical_timestamp = historical_dt.isoformat()
+        
+        # 積算電力量を計算
+        historical_power_kwh = int(power_value_hex, 16) * multiplier
+        
+        # 桁丸め
+        if multiplier < 1:
+            decimals = -int(math.log10(multiplier))
+            historical_power_kwh = round(historical_power_kwh, decimals)
+            
+        return {
+            'historical_timestamp': historical_timestamp,
+            'historical_cumulative_power_kwh': historical_power_kwh
+        }
+        
+    except (ValueError, TypeError) as e:
+        logger.error(f"定時積算電力量の解析エラー: {e}, データ: {hex_value}")
+        return None
