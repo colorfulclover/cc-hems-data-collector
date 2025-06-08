@@ -7,7 +7,7 @@ ECHONET Liteのフレーム解析、各種電力データの数値変換、
 """
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -185,9 +185,9 @@ def parse_current_value(hex_value):
         return None
 
 def get_current_timestamp():
-    """現在の時刻をISO 8601形式のタイムスタンプ文字列として取得します。
+    """現在の時刻をUTC基準のISO 8601形式タイムスタンプ文字列として取得します。
 
     Returns:
-        str: ISO 8601形式のタイムスタンプ文字列。
+        str: UTC基準のISO 8601形式のタイムスタンプ文字列。
     """
-    return datetime.now().isoformat()
+    return datetime.now(timezone.utc).isoformat()

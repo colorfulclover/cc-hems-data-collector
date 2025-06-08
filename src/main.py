@@ -11,7 +11,7 @@ import traceback
 import os
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from croniter import croniter
 
 # srcディレクトリへのパスを追加（直接実行時のみ必要）
@@ -161,7 +161,7 @@ def main():
         # 定期的にデータを取得
         if args.mode == 'schedule':
             # スケジュールモード
-            base_time = datetime.now()
+            base_time = datetime.now(timezone.utc)
             try:
                 cron = croniter(args.schedule, base_time)
                 logger.info(f"スケジュールモードで実行します。スケジュール: '{args.schedule}'")
@@ -172,10 +172,10 @@ def main():
             while client.running:
                 # 次の実行時刻まで待機
                 next_run_datetime = cron.get_next(datetime)
-                wait_seconds = (next_run_datetime - datetime.now()).total_seconds()
+                wait_seconds = (next_run_datetime - datetime.now(timezone.utc)).total_seconds()
                 
                 if wait_seconds > 0:
-                    logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S')} です。({wait_seconds:.1f}秒後)")
+                    logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} です。({wait_seconds:.1f}秒後)")
                     sleep_end = time.time() + wait_seconds
                     while time.time() < sleep_end:
                         if not client.running:
