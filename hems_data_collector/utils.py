@@ -8,6 +8,7 @@ ECHONET Liteのフレーム解析、各種電力データの数値変換、
 import re
 import logging
 from datetime import datetime, timezone
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,11 @@ def parse_cumulative_power(hex_value, multiplier=1.0):
         return None
     try:
         value = int(hex_value, 16) * multiplier
+        # 乗数に基づいて小数点以下の桁数を決定し、丸める
+        if multiplier < 1:
+            # 例: multiplier=0.1 -> decimals=1, 0.01 -> 2
+            decimals = -int(math.log10(multiplier))
+            value = round(value, decimals)
         return value
     except (ValueError, TypeError):
         logger.error(f"積算電力量の解析エラー: {hex_value}")
@@ -233,17 +239,17 @@ def parse_current_value(hex_value):
             # T相が 0x7FFE (未定義) の場合は単相2線式として扱う
             if t_phase_hex.upper() == '7FFE':
                 current_value = _parse_signed_hex(r_phase_hex) / 10.0
-                return {'current': current_value}
+                return {'current': round(current_value, 1)}
             else:
                 # 通常の三相3線式
                 r_phase = _parse_signed_hex(r_phase_hex) / 10.0
                 t_phase = _parse_signed_hex(t_phase_hex) / 10.0
-                return {'current_r': r_phase, 'current_t': t_phase}
+                return {'current_r': round(r_phase, 1), 'current_t': round(t_phase, 1)}
         
         # (下位互換性のため残すが、通常は4バイトで送られる想定)
         elif len(hex_value) == 4:
             current_value = _parse_signed_hex(hex_value) / 10.0
-            return {'current': current_value}
+            return {'current': round(current_value, 1)}
         
         else:
             logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")
