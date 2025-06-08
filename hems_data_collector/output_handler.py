@@ -103,7 +103,7 @@ class OutputHandler:
         elif self.format == 'csv':
             # ヘッダーが存在しない場合やファイルが空の場合にヘッダーを書き込む
             if self.filepath and (not os.path.exists(self.filepath) or os.path.getsize(self.filepath) == 0):
-                self._output_to_file(','.join(CSV_HEADERS) + '\n', append=False)
+                self._output_to_file(','.join(CSV_HEADERS), append=False)
             
             row_data = [
                 str(data.get('timestamp', '')),
