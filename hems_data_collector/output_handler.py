@@ -121,6 +121,7 @@ class OutputHandler:
         try:
             with open(self.filepath, mode, encoding='utf-8') as f:
                 f.write(data_str + '\n')
+            logger.info(f"ファイルにデータを書き込みました: {self.filepath}")
         except IOError as e:
             logger.error(f"ファイル書き込みエラー ({self.filepath}): {e}")
 
@@ -132,7 +133,7 @@ class OutputHandler:
         
         future = self.publisher.publish(self.topic_path, data_str.encode('utf-8'))
         future.result()  # 送信完了を待機
-        logger.info(f"Pub/Subトピック {self.topic_path} にメッセージを送信しました。")
+        logger.info(f"Google Cloud Pub/Subトピックにメッセージを送信しました: {self.topic_path}")
     
     def _output_to_webhook(self, data_str):
         """データをJSONとしてWebhookにPOST送信します。
