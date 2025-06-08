@@ -133,9 +133,34 @@ def parse_cumulative_power(hex_value):
         logger.error(f"積算電力量の解析エラー: {hex_value}")
         return None
 
+def get_current_timestamp():
+    """現在の時刻をUTC基準のISO 8601形式タイムスタンプ文字列として取得します。
+
+    Returns:
+        str: UTC基準のISO 8601形式のタイムスタンプ文字列。
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+def _parse_signed_hex(hex_str: str) -> int:
+    """2の補数表現の16進数文字列を符号付き整数に変換します。
+    
+    Args:
+        hex_str (str): 変換対象の16進数文字列。
+    
+    Returns:
+        int: 変換後の符号付き整数。
+    """
+    value = int(hex_str, 16)
+    bits = len(hex_str) * 4
+    # 最上位ビットが1の場合（負数）
+    if (value & (1 << (bits - 1))) != 0:
+        # 2の補数を計算して負数に変換
+        value = value - (1 << bits)
+    return value
+
 def parse_instant_power(hex_value):
     """瞬時電力の16進数値をW単位の整数に変換します。
-
+    
     Args:
         hex_value (str): 瞬時電力を示す16進数文字列。
 
@@ -145,7 +170,8 @@ def parse_instant_power(hex_value):
     if not hex_value:
         return None
     try:
-        value = int(hex_value, 16)  # 単位はW
+        # 4バイト符号付き整数として解釈
+        value = _parse_signed_hex(hex_value)
         return value
     except (ValueError, TypeError):
         logger.error(f"瞬時電力の解析エラー: {hex_value}")
@@ -168,13 +194,13 @@ def parse_current_value(hex_value):
     try:
         # 三相3線式の場合 (4バイト = 8文字)
         if len(hex_value) == 8:
-            # 2バイトずつに分割して10で割る
-            r_phase = int(hex_value[0:4], 16) / 10.0
-            t_phase = int(hex_value[4:8], 16) / 10.0
+            # 2バイトずつ(符号付き)に分割して10で割る
+            r_phase = _parse_signed_hex(hex_value[0:4]) / 10.0
+            t_phase = _parse_signed_hex(hex_value[4:8]) / 10.0
             return {'current_r': r_phase, 'current_t': t_phase}
         # 単相2線式の場合 (2バイト = 4文字)
         elif len(hex_value) == 4:
-            current_value = int(hex_value, 16) / 10.0  # 単位はA
+            current_value = _parse_signed_hex(hex_value) / 10.0  # 単位はA
             return {'current': current_value}
         else:
             logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")
@@ -183,11 +209,3 @@ def parse_current_value(hex_value):
     except (ValueError, TypeError):
         logger.error(f"瞬時電流の解析エラー: {hex_value}")
         return None
-
-def get_current_timestamp():
-    """現在の時刻をUTC基準のISO 8601形式タイムスタンプ文字列として取得します。
-
-    Returns:
-        str: UTC基準のISO 8601形式のタイムスタンプ文字列。
-    """
-    return datetime.now(timezone.utc).isoformat()
