@@ -207,7 +207,7 @@ class SmartMeterClient:
             logger.info("接続情報をスキャンで取得します...")
             # ネットワークスキャンの実行
             logger.info(f"ネットワークスキャンを実行中...")
-            response = self.send_command(f"SKSCAN 2 FFFFFFFF 6", wait_time=10)
+            response = self.send_command(f"SKSCAN 2 FFFFFFFF 6", wait_time=20)
             
             # スキャン結果からPANアドレスを取得
             pan_addr_match = re.search(r'Addr:([0-9A-F]{16})', response)
