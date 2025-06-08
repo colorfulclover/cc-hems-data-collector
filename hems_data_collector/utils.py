@@ -115,11 +115,12 @@ def parse_echonet_response(response, property_code):
     logger.warning(f"応答内に要求したプロパティ {property_code} が見つかりませんでした。")
     return None
 
-def parse_cumulative_power(hex_value):
-    """積算電力量の16進数値をkWh単位の浮動小数点数に変換します。
+def parse_cumulative_power(hex_value, multiplier=1.0):
+    """積算電力量の16進数値を指定された倍率を適用してkWh単位の浮動小数点数に変換します。
 
     Args:
         hex_value (str): 積算電力量を示す16進数文字列。
+        multiplier (float, optional): 適用する倍率。Defaults to 1.0.
 
     Returns:
         float | None: 変換後のkWh値。エラーの場合はNone。
@@ -127,11 +128,37 @@ def parse_cumulative_power(hex_value):
     if not hex_value:
         return None
     try:
-        value = int(hex_value, 16) / 10.0  # 単位はkWh
+        value = int(hex_value, 16) * multiplier
         return value
     except (ValueError, TypeError):
         logger.error(f"積算電力量の解析エラー: {hex_value}")
         return None
+
+POWER_UNITS = {
+    "00": 1.0,        # 1 kWh
+    "01": 0.1,      # 0.1 kWh
+    "02": 0.01,     # 0.01 kWh
+    "03": 0.001,    # 0.001 kWh
+    "04": 0.0001,   # 0.0001 kWh
+    "0A": 10.0,       # 10 kWh
+    "0B": 100.0,      # 100 kWh
+    "0C": 1000.0,     # 1000 kWh
+    "0D": 10000.0,    # 10000 kWh
+}
+
+def parse_power_unit(hex_value: str) -> float:
+    """積算電力量単位の16進数値を倍率(float)に変換します。
+
+    Args:
+        hex_value (str): 積算電力量単位を示す16進数文字列。
+
+    Returns:
+        float: 変換後の倍率。不明な場合は1.0を返す。
+    """
+    if not hex_value or hex_value.upper() not in POWER_UNITS:
+        logger.warning(f"不明な電力単位コードです: {hex_value}。デフォルトの倍率(1.0)を使用します。")
+        return 1.0
+    return POWER_UNITS[hex_value.upper()]
 
 def get_current_timestamp():
     """現在の時刻をUTC基準のISO 8601形式タイムスタンプ文字列として取得します。

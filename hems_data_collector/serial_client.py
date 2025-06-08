@@ -18,7 +18,7 @@ from hems_data_collector.config import (
     ECHONET_PROPERTY_CODES
 )
 from hems_data_collector.utils import (
-    parse_echonet_response, parse_cumulative_power,
+    parse_echonet_response, parse_cumulative_power, parse_power_unit,
     parse_instant_power, parse_current_value, get_current_timestamp,
     parse_echonet_frame
 )
@@ -444,19 +444,25 @@ class SmartMeterClient:
         data['timestamp'] = get_current_timestamp()
         
         try:
+            # 積算電力量の単位(E1)を先に取得
+            logger.info("積算電力量の単位を要求中...")
+            unit_response = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_UNIT'], 1)
+            unit_hex_value = parse_echonet_response(unit_response, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_UNIT'])
+            power_multiplier = parse_power_unit(unit_hex_value)
+
             # 積算電力量計測値の取得
             logger.info("積算電力量を要求中...")
-            response = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER'], 1)
+            response = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER'], 2)
             hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER'])
             if hex_value:
-                power_value = parse_cumulative_power(hex_value)
+                power_value = parse_cumulative_power(hex_value, power_multiplier)
                 if power_value is not None:
                     data['cumulative_power'] = power_value
-                    logger.info(f"積算電力量: {power_value} kWh")
+                    logger.info(f"積算電力量: {power_value} kWh (単位乗数: {power_multiplier})")
             
             # 瞬時電力計測値の取得
             logger.info("瞬時電力を要求中...")
-            response = self.get_property(ECHONET_PROPERTY_CODES['INSTANT_POWER'], 2)
+            response = self.get_property(ECHONET_PROPERTY_CODES['INSTANT_POWER'], 3)
             hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['INSTANT_POWER'])
             if hex_value:
                 power_value = parse_instant_power(hex_value)
@@ -466,7 +472,7 @@ class SmartMeterClient:
             
             # 瞬時電流計測値の取得
             logger.info("瞬時電流を要求中...")
-            response = self.get_property(ECHONET_PROPERTY_CODES['CURRENT_VALUE'], 3)
+            response = self.get_property(ECHONET_PROPERTY_CODES['CURRENT_VALUE'], 4)
             hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['CURRENT_VALUE'])
             if hex_value:
                 current_data = parse_current_value(hex_value)
