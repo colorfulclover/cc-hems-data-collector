@@ -119,32 +119,31 @@ timestamp,cumulative_power_kwh,instant_power_w,current_r_a,current_t_a
 
 **Google Cloud Pub/Sub へ出力する**
 ```bash
-python hems_data_collector.py --output cloud
+python hems_data_collector.py --output gcloud
 ```
 (事前に`GCP_PROJECT_ID`と`GCP_TOPIC_NAME`環境変数の設定、または`gcloud auth application-default login`での認証が必要です)
 
 
 ### コマンドラインオプション
 
-`python hems_data_collector.py --help`で詳細なオプションを確認できます。
-
-| オプション | 説明 | デフォルト値 |
-|:--- |:--- |:--- |
-| `-h`, `--help` | ヘルプメッセージを表示 | |
-| `-o`, `--output` | 出力タイプ (`stdout`, `file`, `cloud`, `all`)。 | `None` (ログ出力のみ) |
-| `-f`, `--format` | 出力フォーマット (`json`, `yaml`, `csv`)。 | `json` |
-| `--file` | ファイル出力時のパス。 | `hems_data.dat` |
-| `--project` | Google CloudプロジェクトID。 | (環境変数またはconfig値) |
-| `--topic` | Pub/Subトピック名。 | (環境変数またはconfig値) |
-| `--port` | シリアルポート。 | (環境変数またはconfig値) |
-| `--baudrate`| ボーレート。 | (環境変数またはconfig値) |
-| `--meter-channel`| スマートメーターのチャンネル。 | (自動スキャン) |
-| `--meter-panid`| スマートメーターのPAN ID。 | (自動スキャン) |
-| `--meter-ipv6`| スマートメーターのIPv6アドレス。 | (自動スキャン) |
-| `--mode` | 実行モード (`schedule` or `interval`)。 | `schedule` |
-| `-s`, `--schedule`| データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` |
-| `-i`, `--interval`| データ取得間隔（秒）。`interval`モードで有効。 | `300` |
-| `--debug` | デバッグモードを有効化（詳細ログ出力）。 | `False` |
+| オプション | 短縮形 | 説明 | デフォルト値 |
+|:--- |:--- |:--- |:--- |
+| `--help` | `-h` | ヘルプメッセージを表示します。 | - |
+| `--output` | `-o` | 出力タイプ (`stdout`, `file`, `gcloud`, `webhook`)。複数指定可。 | `None` (ログ出力のみ) |
+| `--format` | `-f` | 出力フォーマット (`json`, `yaml`, `csv`)。 | `json` |
+| `--file` | | ファイル出力時のパス。 | `hems_data.dat` |
+| `--gcp-project` | | Google CloudプロジェクトID。 | 環境変数 `GCP_PROJECT_ID` |
+| `--gcp-topic` | | Google Cloud Pub/Subトピック名。 | 環境変数 `GCP_TOPIC_NAME` |
+| `--webhook-url` | | Webhookの送信先URL。 | 環境変数 `WEBHOOK_URL` |
+| `--port` | | Wi-SUNモジュールが接続されているシリアルポート。 | 環境変数 `SERIAL_PORT` |
+| `--baudrate` | | シリアルポートのボーレート。 | 環境変数 `SERIAL_RATE` |
+| `--meter-channel` | | スマートメーターのチャンネル。指定するとスキャンを省略。 | `None` |
+| `--meter-panid` | | スマートメーターのPAN ID。指定するとスキャンを省略。 | `None` |
+| `--meter-ipv6` | | スマートメーターのIPv6アドレス。指定するとスキャンを省略。 | `None` |
+| `--mode` | | 実行モード (`schedule` または `interval`)。 | `schedule` |
+| `--schedule` | `-s` | データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` (5分ごと) |
+| `--interval` | `-i` | データ取得間隔（秒）。`interval`モードで有効。 | `300` |
+| `--debug` | | デバッグモードを有効化（詳細なログを出力）。 | `False` |
 
 
 ---

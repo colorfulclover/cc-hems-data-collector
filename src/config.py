@@ -29,13 +29,15 @@ B_ROUTE_PASSWORD = os.environ.get('B_ROUTE_PASSWORD', "0000000000000000000000000
 DEFAULT_DATA_FILE = "hems_data.dat"
 
 # Google Cloud Pub/Sub設定
-PROJECT_ID = os.environ.get('GCP_PROJECT_ID', "your-project-id")  # Google Cloudプロジェクト
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', "your-project-id")  # Google Cloudプロジェクト
 GCP_TOPIC_NAME = os.getenv('GCP_TOPIC_NAME', 'hems-data')
 
 # デフォルトの実行スケジュール（5分ごと）
 DEFAULT_SCHEDULE = '*/5 * * * *' 
 # デフォルトの実行間隔（秒）
 DEFAULT_INTERVAL = 300
+# デフォルトのWebhook URL
+DEFAULT_WEBHOOK_URL = "http://localhost:8000/webhook"
 
 # ECHONET Lite関連の定数
 ECHONET_PROPERTY_CODES = {

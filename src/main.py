@@ -19,8 +19,9 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.config import (
-    DEFAULT_DATA_FILE, PROJECT_ID, GCP_TOPIC_NAME,
-    SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE, DEFAULT_INTERVAL
+    DEFAULT_DATA_FILE, GCP_PROJECT_ID, GCP_TOPIC_NAME,
+    SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE, DEFAULT_INTERVAL,
+    DEFAULT_WEBHOOK_URL
 )
 from src.serial_client import SmartMeterClient
 from src.output_handler import OutputHandler
@@ -38,8 +39,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='HEMSデータ取得ツール')
     
     # 出力タイプ
-    parser.add_argument('--output', '-o', choices=['stdout', 'file', 'cloud', 'all'], 
-                        default=None, help='出力タイプ (デフォルト: なし、ログ出力のみ)')
+    parser.add_argument(
+        '--output', '-o', choices=['stdout', 'file', 'gcloud', 'webhook'], 
+        nargs='*', default=None, 
+        help='出力タイプを1つ以上選択 (例: --output stdout file)。(デフォルト: なし、ログ出力のみ)'
+    )
     
     # 出力フォーマット
     parser.add_argument('--format', '-f', choices=['json', 'yaml', 'csv'], 
@@ -50,10 +54,14 @@ def parse_args():
                         help=f'ファイル出力パス (デフォルト: {DEFAULT_DATA_FILE})')
     
     # Google Cloud Pub/Sub設定
-    parser.add_argument('--project', default=PROJECT_ID, 
-                        help=f'Google Cloudプロジェクト (デフォルト: {PROJECT_ID})')
-    parser.add_argument('--topic', default=GCP_TOPIC_NAME, 
+    parser.add_argument('--gcp-project', default=GCP_PROJECT_ID, 
+                        help=f'Google CloudプロジェクトID (デフォルト: {GCP_PROJECT_ID})')
+    parser.add_argument('--gcp-topic', default=GCP_TOPIC_NAME, 
                         help=f'Pub/Subトピック名 (デフォルト: {GCP_TOPIC_NAME})')
+    
+    # Webhook設定
+    parser.add_argument('--webhook-url', default=DEFAULT_WEBHOOK_URL,
+                        help=f'Webhook送信先URL (デフォルト: {DEFAULT_WEBHOOK_URL})')
     
     # シリアルポート設定
     parser.add_argument('--port', default=SERIAL_PORT, 
@@ -100,24 +108,29 @@ def setup_output_handlers(args):
     """
     output_handlers = []
     
-    if args.output == 'stdout' or args.output == 'all':
+    if not args.output:
+        return output_handlers
+
+    if 'stdout' in args.output:
         output_handlers.append(OutputHandler('stdout', args.format))
     
-    if args.output == 'file' or args.output == 'all':
-        # ファイル拡張子の設定
+    if 'file' in args.output:
         file_ext = {'json': '.json', 'yaml': '.yaml', 'csv': '.csv'}
         file_path = args.file
         if not any(file_path.endswith(ext) for ext in file_ext.values()):
             file_path += file_ext.get(args.format, '')
         
-        output_handlers.append(OutputHandler('file', args.format, file_path))
+        output_handlers.append(OutputHandler('file', args.format, filepath=file_path))
     
-    if args.output == 'cloud' or args.output == 'all':
+    if 'gcloud' in args.output:
         try:
             from google.cloud import pubsub_v1
-            output_handlers.append(OutputHandler('cloud', 'json', None, args.project, args.topic))
+            output_handlers.append(OutputHandler('gcloud', 'json', project_id=args.gcp_project, topic_name=args.gcp_topic))
         except ImportError:
             logger.error("Google Cloud Pub/Sub機能が利用できません。パッケージをインストールしてください: pip install google-cloud-pubsub")
+
+    if 'webhook' in args.output:
+        output_handlers.append(OutputHandler('webhook', 'json', webhook_url=args.webhook_url))
     
     return output_handlers
 
