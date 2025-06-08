@@ -20,5 +20,4 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from src.main import main
 
 if __name__ == "__main__":
-    logger.info("hems_data_collector を起動します")
     main()

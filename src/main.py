@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
 from src.config import (
     DEFAULT_DATA_FILE, PROJECT_ID, GCP_TOPIC_NAME,
-    SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE
+    SERIAL_PORT, SERIAL_RATE, DEFAULT_SCHEDULE, DEFAULT_INTERVAL
 )
 from src.serial_client import SmartMeterClient
 from src.output_handler import OutputHandler
@@ -64,10 +64,20 @@ def parse_args():
     parser.add_argument('--meter-panid', type=str, help='スマートメーターのPAN ID')
     parser.add_argument('--meter-ipv6', type=str, help='スマートメーターのIPv6アドレス')
     
+    # 実行モード設定
+    parser.add_argument(
+        '--mode', type=str, default='schedule', choices=['schedule', 'interval'],
+        help='実行モード (デフォルト: schedule)'
+    )
     # スケジュール設定
     parser.add_argument(
         '--schedule', '-s', type=str, default=DEFAULT_SCHEDULE,
-        help=f'データ取得スケジュール（crontab形式, デフォルト: "{DEFAULT_SCHEDULE}")'
+        help=f'データ取得スケジュール（crontab形式, scheduleモードで有効, デフォルト: "{DEFAULT_SCHEDULE}")'
+    )
+    # 間隔設定
+    parser.add_argument(
+        '--interval', '-i', type=int, default=DEFAULT_INTERVAL,
+        help=f'データ取得間隔（秒, intervalモードで有効, デフォルト: {DEFAULT_INTERVAL})'
     )
     
     # ログレベル設定
@@ -117,6 +127,7 @@ def main():
     データ取得のメインループを開始します。
     """
     args = parse_args()
+    logger.info("hems_data_collector を起動します")
     
     # ログレベルの設定
     if args.debug:
@@ -144,50 +155,77 @@ def main():
             logger.error("初期化に失敗しました。プログラムを終了します。")
             return
         
-        base_time = datetime.now()
-        try:
-            cron = croniter(args.schedule, base_time)
-            logger.info(f"スケジュール '{args.schedule}' で実行します。")
-        except ValueError as e:
-            logger.error(f"不正なcron形式のスケジュールです: {args.schedule} - {e}")
-            return
-
         # 定期的にデータを取得
-        while client.running:
-            # 次の実行時刻まで待機
-            next_run_datetime = cron.get_next(datetime)
-            wait_seconds = (next_run_datetime - datetime.now()).total_seconds()
-            
-            if wait_seconds > 0:
-                logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S')} です。({wait_seconds:.1f}秒後)")
+        if args.mode == 'schedule':
+            # スケジュールモード
+            base_time = datetime.now()
+            try:
+                cron = croniter(args.schedule, base_time)
+                logger.info(f"スケジュールモードで実行します。スケジュール: '{args.schedule}'")
+            except ValueError as e:
+                logger.error(f"不正なcron形式のスケジュールです: {args.schedule} - {e}")
+                return
+
+            while client.running:
+                # 次の実行時刻まで待機
+                next_run_datetime = cron.get_next(datetime)
+                wait_seconds = (next_run_datetime - datetime.now()).total_seconds()
                 
-                sleep_end = time.time() + wait_seconds
+                if wait_seconds > 0:
+                    logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S')} です。({wait_seconds:.1f}秒後)")
+                    sleep_end = time.time() + wait_seconds
+                    while time.time() < sleep_end:
+                        if not client.running:
+                            # スリープ中に停止した場合、ループを抜ける
+                            break
+                        time.sleep(min(1, sleep_end - time.time()))
+                
+                if not client.running:
+                    logger.info("クライアントが停止しました。")
+                    break
+
+                # データ取得
+                try:
+                    meter_data = client.get_meter_data()
+                    if meter_data:
+                        client.data_queue.put(meter_data)
+                        logger.info(f"データを取得しました: {meter_data}")
+                    else:
+                        logger.info("データが取得できませんでした。")
+                except Exception as e:
+                    logger.error(f"データ取得中にエラーが発生しました: {e}")
+
+        elif args.mode == 'interval':
+            # インターバルモード
+            logger.info(f"インターバルモードで実行します。間隔: {args.interval}秒")
+            while client.running:
+                if not client.running:
+                    logger.info("クライアントが停止しました。")
+                    break
+
+                # データ取得
+                try:
+                    meter_data = client.get_meter_data()
+                    if meter_data:
+                        # データキューに追加
+                        client.data_queue.put(meter_data)
+                        logger.info(f"データを取得しました: {meter_data}")
+                    else:
+                        logger.info("データが取得できませんでした。")
+                
+                except KeyboardInterrupt:
+                        raise
+                except Exception as e:
+                    logger.error(f"データ取得中にエラーが発生しました: {e}")
+
+                # 指定間隔待機
+                logger.info(f"{args.interval}秒後に再度データを取得します...")
+                sleep_end = time.time() + args.interval
                 while time.time() < sleep_end:
                     if not client.running:
                         # スリープ中に停止した場合、ループを抜ける
                         break
                     time.sleep(min(1, sleep_end - time.time()))
-
-            # client.running の状態を再チェック
-            if not client.running:
-                logger.info("クライアントが停止しました。")
-                break
-
-            # データ取得
-            try:
-                # データ取得
-                meter_data = client.get_meter_data()
-                if meter_data:
-                     # データキューに追加
-                    client.data_queue.put(meter_data)
-                    logger.info(f"データを取得しました: {meter_data}")
-                else:
-                    logger.info("データが取得できませんでした。")
-                
-            except KeyboardInterrupt:
-                    raise
-            except Exception as e:
-                logger.error(f"データ取得中にエラーが発生しました: {e}")
 
     except KeyboardInterrupt:
         logger.info("プログラムを終了します...")

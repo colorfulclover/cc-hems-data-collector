@@ -141,7 +141,9 @@ python hems_data_collector.py --output cloud
 | `--meter-channel`| スマートメーターのチャンネル。 | (自動スキャン) |
 | `--meter-panid`| スマートメーターのPAN ID。 | (自動スキャン) |
 | `--meter-ipv6`| スマートメーターのIPv6アドレス。 | (自動スキャン) |
-| `-s`, `--schedule`| データ取得スケジュール（crontab形式）。 | `*/5 * * * *` |
+| `--mode` | 実行モード (`schedule` or `interval`)。 | `schedule` |
+| `-s`, `--schedule`| データ取得スケジュール（crontab形式）。`schedule`モードで有効。 | `*/5 * * * *` |
+| `-i`, `--interval`| データ取得間隔（秒）。`interval`モードで有効。 | `300` |
 | `--debug` | デバッグモードを有効化（詳細ログ出力）。 | `False` |
 
 

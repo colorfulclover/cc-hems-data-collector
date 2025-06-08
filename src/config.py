@@ -32,10 +32,10 @@ DEFAULT_DATA_FILE = "hems_data.dat"
 PROJECT_ID = os.environ.get('GCP_PROJECT_ID', "your-project-id")  # Google Cloudプロジェクト
 GCP_TOPIC_NAME = os.getenv('GCP_TOPIC_NAME', 'hems-data')
 
-# データ取得間隔（秒） - Deprecated: スケジュール実行に移行
-# DEFAULT_INTERVAL = 300
 # デフォルトの実行スケジュール（5分ごと）
 DEFAULT_SCHEDULE = '*/5 * * * *' 
+# デフォルトの実行間隔（秒）
+DEFAULT_INTERVAL = 300
 
 # ECHONET Lite関連の定数
 ECHONET_PROPERTY_CODES = {
