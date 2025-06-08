@@ -45,6 +45,8 @@ DEFAULT_SCHEDULE = '*/5 * * * *'
 DEFAULT_INTERVAL = 300
 # デフォルトのWebhook URL
 DEFAULT_WEBHOOK_URL = "http://localhost:8000/webhook"
+# デフォルトのタイムゾーン
+LOCAL_TIMEZONE = os.environ.get('LOCAL_TIMEZONE', "Asia/Tokyo")
 
 # ECHONET Lite関連の定数
 ECHONET_PROPERTY_CODES = {

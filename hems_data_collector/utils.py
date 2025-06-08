@@ -5,12 +5,25 @@ ECHONET Liteのフレーム解析、各種電力データの数値変換、
 タイムスタンプ生成など、プロジェクト全体で利用される
 ヘルパー関数を提供します。
 """
-import re
 import logging
 from datetime import datetime, timezone
 import math
+import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from hems_data_collector.config import LOCAL_TIMEZONE
 
 logger = logging.getLogger(__name__)
+
+def get_timezone():
+    if LOCAL_TIMEZONE:
+        try:
+            return ZoneInfo(LOCAL_TIMEZONE)
+        except ZoneInfoNotFoundError:
+            logger.error(f"指定されたタイムゾーンが無効です: {LOCAL_TIMEZONE}. UTCを使用します。")
+            return timezone.utc
+    else:
+        return timezone.utc
 
 def parse_echonet_frame(frame_hex_str: str) -> dict | None:
     """ECHONET Liteのフレーム(16進数文字列)を辞書にパースします。
@@ -283,11 +296,22 @@ def parse_historical_power(hex_value, multiplier=1.0):
         second = int(hex_value[12:14], 16)
         
         power_value_hex = hex_value[14:22]
-        
-        # タイムスタンプを作成
-        historical_dt = datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
-        historical_timestamp = historical_dt.isoformat()
-        
+
+        try:
+            # タイムゾーン情報のないdatetimeオブジェクトを作成
+            naive_dt = datetime(year, month, day, hour, minute, second)
+            
+            # 設定されたタイムゾーン情報を付与
+            tz = get_timezone()
+            local_dt = naive_dt.replace(tzinfo=tz)
+            
+            # UTCに変換してISOフォーマット文字列を生成
+            historical_timestamp = local_dt.astimezone(timezone.utc).isoformat()
+        except Exception as e:
+            logger.error(f"タイムスタンプのタイムゾーン変換中にエラーが発生しました: {e}")
+            # エラーが発生した場合は、タイムゾーン情報なしのタイムスタンプを使用する
+            historical_timestamp = datetime(year, month, day, hour, minute, second).isoformat()
+
         # 積算電力量を計算
         historical_power_kwh = int(power_value_hex, 16) * multiplier
         
@@ -295,7 +319,7 @@ def parse_historical_power(hex_value, multiplier=1.0):
         if multiplier < 1:
             decimals = -int(math.log10(multiplier))
             historical_power_kwh = round(historical_power_kwh, decimals)
-            
+
         return {
             'historical_timestamp': historical_timestamp,
             'historical_cumulative_power_kwh': historical_power_kwh
