@@ -500,10 +500,13 @@ class SmartMeterClient:
                 current_data = parse_current_value(hex_value)
                 if current_data:
                     data.update(current_data)
-                    if 'current' in current_data:
-                        logger.info(f"瞬時電流: {current_data['current']} A")
+                    # ログ出力のキー名を修正
+                    if current_data.get('current_t_a') is None:
+                        # 単相
+                        logger.info(f"瞬時電流: {current_data.get('current_a')} A")
                     else:
-                        logger.info(f"瞬時電流: R相={current_data['current_r']}A, T相={current_data['current_t']}A")
+                        # 三相
+                        logger.info(f"瞬時電流: R相={current_data.get('current_r_a')} A, T相={current_data.get('current_t_a')} A (合計: {current_data.get('current_a')} A)")
             
             # 定時積算電力量計測値(EA)の取得
             logger.info("定時積算電力量を要求中...")

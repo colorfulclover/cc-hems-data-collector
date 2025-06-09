@@ -229,11 +229,10 @@ def parse_instant_power(hex_value):
 def parse_current_value(hex_value):
     """瞬時電流の16進数値をA単位の辞書に変換します。
 
-    2バイトの符号付き整数として各値を解釈します。
-    R相とT相で構成され、単相2線式の場合はT相に0x7FFEがセットされます。
-    
-    - 三相3線式: {'current_r': float, 'current_t': float}
-    - 単相2線式: {'current': float}
+    戻り値のフォーマットは常に統一されます。
+    - `current_a`: 代表電流(A)。単相時はR相の値、三相時はR相とT相の合計値。
+    - `current_r_a`: R相電流(A)。
+    - `current_t_a`: T相電流(A)。単相時はNone。
 
     Args:
         hex_value (str): 瞬時電流を示す16進数文字列。
@@ -251,18 +250,30 @@ def parse_current_value(hex_value):
 
             # T相が 0x7FFE (未定義) の場合は単相2線式として扱う
             if t_phase_hex.upper() == '7FFE':
-                current_value = _parse_signed_hex(r_phase_hex) / 10.0
-                return {'current': round(current_value, 1)}
+                current_r = _parse_signed_hex(r_phase_hex) / 10.0
+                return {
+                    'current_a': round(current_r, 1),
+                    'current_r_a': round(current_r, 1),
+                    'current_t_a': None
+                }
             else:
                 # 通常の三相3線式
-                r_phase = _parse_signed_hex(r_phase_hex) / 10.0
-                t_phase = _parse_signed_hex(t_phase_hex) / 10.0
-                return {'current_r': round(r_phase, 1), 'current_t': round(t_phase, 1)}
+                current_r = _parse_signed_hex(r_phase_hex) / 10.0
+                current_t = _parse_signed_hex(t_phase_hex) / 10.0
+                return {
+                    'current_a': round(current_r + current_t, 1),
+                    'current_r_a': round(current_r, 1),
+                    'current_t_a': round(current_t, 1)
+                }
         
         # (下位互換性のため残すが、通常は4バイトで送られる想定)
         elif len(hex_value) == 4:
-            current_value = _parse_signed_hex(hex_value) / 10.0
-            return {'current': round(current_value, 1)}
+            current_r = _parse_signed_hex(hex_value) / 10.0
+            return {
+                'current_a': round(current_r, 1),
+                'current_r_a': round(current_r, 1),
+                'current_t_a': None
+            }
         
         else:
             logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")

@@ -64,6 +64,7 @@ CSV_HEADERS = [
     'timestamp', 
     'cumulative_power_kwh', 
     'instant_power_w', 
+    'current_a',
     'current_r_a', 
     'current_t_a',
     'historical_timestamp',
