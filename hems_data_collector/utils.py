@@ -359,13 +359,20 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
 
     try:
         today_readings = _extract_readings(today_edt)
-        yesterday_readings = _extract_readings(yesterday_edt) if yesterday_edt else []
+        
+        # 昨日データが提供されているかどうかのフラグ
+        is_yesterday_data_present = yesterday_edt is not None and len(yesterday_edt) >= 388
 
-        combined_readings = yesterday_readings + today_readings
+        if is_yesterday_data_present:
+            yesterday_readings = _extract_readings(yesterday_edt)
+            combined_readings = yesterday_readings + today_readings
+        else:
+            combined_readings = today_readings
 
         latest_value = None
         previous_value = None
         latest_idx_abs = -1
+        previous_idx_abs = -1
 
         for i in range(len(combined_readings) - 1, -1, -1):
             if combined_readings[i] is not None:
@@ -374,6 +381,7 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
                     latest_idx_abs = i
                 else:
                     previous_value = combined_readings[i]
+                    previous_idx_abs = i
                     break
         
         if latest_value is None or previous_value is None:
@@ -382,8 +390,47 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
 
         consumption_kwh = (latest_value - previous_value) * multiplier
         
-        is_today = latest_idx_abs >= 48
-        latest_idx_rel = latest_idx_abs - 48 if is_today else latest_idx_abs
+        def _get_timestamp_from_index(idx, is_yesterday_present):
+            if is_yesterday_present:
+                is_today_calc = idx >= 48
+            else:
+                is_today_calc = True
+            
+            if is_yesterday_present and is_today_calc:
+                idx_rel = idx - 48
+            else:
+                idx_rel = idx
+
+            hour_calc = (idx_rel * 30) // 60
+            minute_calc = (idx_rel * 30) % 60
+            
+            date_calc = datetime.now(get_timezone()).date()
+            if not is_today_calc:
+                date_calc -= timedelta(days=1)
+                
+            ts = datetime(date_calc.year, date_calc.month, date_calc.day, hour_calc, minute_calc, tzinfo=get_timezone())
+            return ts.isoformat()
+
+        latest_ts = _get_timestamp_from_index(latest_idx_abs, is_yesterday_data_present)
+        previous_ts = _get_timestamp_from_index(previous_idx_abs, is_yesterday_data_present)
+        
+        logger.debug(f"30分消費電力計算デバッグ:")
+        logger.debug(f"  - 最新値 (時刻: {latest_ts}): {latest_value} (raw)")
+        logger.debug(f"  - 前回値 (時刻: {previous_ts}): {previous_value} (raw)")
+        logger.debug(f"  - 乗数: {multiplier}")
+        logger.debug(f"  - 計算結果: {consumption_kwh} kWh")
+
+        # is_today の判定ロジックを修正
+        if is_yesterday_data_present:
+            is_today = latest_idx_abs >= 48
+        else:
+            is_today = True # 昨日データがないなら、見つかったインデックスは必ず今日のもの
+
+        # 相対インデックスの計算
+        if is_yesterday_data_present and is_today:
+            latest_idx_rel = latest_idx_abs - 48
+        else:
+            latest_idx_rel = latest_idx_abs
         
         hour = (latest_idx_rel * 30) // 60
         minute = (latest_idx_rel * 30) % 60
