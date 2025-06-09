@@ -430,11 +430,11 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
         latest_ts = _get_timestamp_from_index(latest_idx_abs, is_yesterday_data_present)
         previous_ts = _get_timestamp_from_index(previous_idx_abs, is_yesterday_data_present)
         
-        logger.debug("--- 30分消費電力計算デバッグ ---")
-        logger.debug(f"  - 最新値 (時刻: {latest_ts}): {latest_value} (raw)")
-        logger.debug(f"  - 前回値 (時刻: {previous_ts}): {previous_value} (raw)")
-        logger.debug(f"  - 乗数: {multiplier}")
-        logger.debug(f"  - 計算結果: {consumption_kwh} kWh")
+        logger.debug("--- 30分消費電力計算 ---")
+        logger.debug(f"  最新値 (時刻: {latest_ts}): {latest_value} (raw)")
+        logger.debug(f"  前回値 (時刻: {previous_ts}): {previous_value} (raw)")
+        logger.debug(f"  乗数: {multiplier}")
+        logger.debug(f"  計算結果: {consumption_kwh} kWh")
 
         # is_today の判定ロジックを修正
         if is_yesterday_data_present:
