@@ -12,6 +12,44 @@
 - **選べる出力形式**: 出力データは `json`, `yaml`, `csv` から選択できます。
 - **設定の柔軟性**: 主な設定は環境変数またはコマンドライン引数で行うことができ、柔軟な運用が可能です。
 
+## 出力データフォーマット
+
+取得されるデータは、以下のJSONオブジェクト形式で出力されます。
+CSV形式の場合も、これらのキーがヘッダーとして使用されます。
+単相と三相で瞬時電流のキーは共通化されており、存在しない値は `null` (JSONの場合)または空文字(CSVの場合)になります。
+
+### JSON形式の例
+
+```json
+{
+  "timestamp": "2023-10-27T10:00:00.123456+00:00",
+  "cumulative_power_kwh": 12345.6,
+  "instant_power_w": 500,
+  "current_a": 7.5,
+  "current_r_a": 5.0,
+  "current_t_a": 2.5,
+  "historical_timestamp": "2023-10-27T10:00:00+00:00",
+  "historical_cumulative_power_kwh": 12345.5,
+  "recent_30min_timestamp": "2023-10-27T09:30:00+00:00",
+  "recent_30min_consumption_kwh": 0.2
+}
+```
+
+### フィールド説明
+
+| キー | 型 | 説明 |
+|:--- |:--- |:--- |
+| `timestamp` | string | データ取得時刻 (UTC, ISO 8601形式)。 |
+| `cumulative_power_kwh` | float | 積算電力量 (kWh)。 |
+| `instant_power_w` | integer | 瞬時電力 (W)。 |
+| `current_a` | float | 代表電流 (A)。単相時はR相の値、三相時はR相とT相の合計値。 |
+| `current_r_a` | float | R相の瞬時電流 (A)。 |
+| `current_t_a` | float \| null | T相の瞬時電流 (A)。単相2線式の場合は `null`。 |
+| `historical_timestamp` | string | 定時積算電力量の計測時刻 (UTC, ISO 8601形式)。通常は30分ごとの時刻。 |
+| `historical_cumulative_power_kwh` | float | 定時積算電力量 (kWh)。 |
+| `recent_30min_timestamp` | string | 直近30分間の消費電力量の計測時刻 (UTC, ISO 8601形式)。 |
+| `recent_30min_consumption_kwh` | float | 直近30分間の消費電力量 (kWh)。 |
+
 ## 動作環境
 
 - Python 3.11 以上
