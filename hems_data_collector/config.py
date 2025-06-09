@@ -53,7 +53,8 @@ ECHONET_PROPERTY_CODES = {
     'CUMULATIVE_POWER': "E0",  # 積算電力量計測値
     'CUMULATIVE_POWER_UNIT': "E1", # 積算電力量単位
     'HISTORICAL_CUMULATIVE_POWER': "EA", # 定時積算電力量計測値
-    'CUMULATIVE_POWER_HISTORY_2': "EC", # 積算電力量計測値履歴2
+    'CUMULATIVE_POWER_HISTORY_1': "E2", # 積算電力量計測値履歴1
+    'SET_CUMULATIVE_HISTORY_DAY': "E5",  # 積算履歴収集日1
     'INSTANT_POWER': "E7",     # 瞬時電力計測値
     'CURRENT_VALUE': "E8",     # 瞬時電流計測値
 }

@@ -20,7 +20,7 @@ from hems_data_collector.config import (
 from hems_data_collector.utils import (
     parse_echonet_response, parse_cumulative_power, parse_power_unit,
     parse_instant_power, parse_current_value, get_current_timestamp,
-    parse_echonet_frame, parse_historical_power, parse_recent_30min_consumption
+    parse_echonet_frame, parse_historical_power, parse_cumulative_power_history
 )
 
 logger = logging.getLogger(__name__)
@@ -293,45 +293,88 @@ class SmartMeterClient:
         logger.error("スマートメーターへの接続に失敗しました (予期せぬフロー)")
         return False
     
+    def _wait_for_echonet_response(self, property_code, request_tid_hex, expected_esv='72'):
+        """指定したTIDを持つECHONET Liteの応答を待ち受けます。"""
+        logger.info(f"ERXUDP待機開始 (プロパティ: {property_code}, ESV: {expected_esv})")
+        start_time = time.time()
+        while time.time() - start_time < 20: # タイムアウトを20秒に設定
+            if not self.running:
+                logger.info("データ取得が中断されました。(ERXUDP 待機中)")
+                return None
+            
+            line = ""
+            if self.ser and self.ser.in_waiting > 0:
+                try:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line: logger.debug(f"受信 (ERXUDP 待機中): {line}")
+                except Exception as e:
+                    logger.warning(f"ERXUDP 待機中のシリアル読み取りエラー: {e}")
+            
+            if not line:
+                time.sleep(0.5)
+                continue
+
+            if line.startswith("ERXUDP"):
+                parts = line.strip().split(' ')
+                if len(parts) >= 9:
+                    echonet_data_hex = parts[8]
+                    parsed_frame = parse_echonet_frame(echonet_data_hex)
+                    if not (parsed_frame and parsed_frame['TID'] == request_tid_hex):
+                        continue
+
+                    # 期待するESV（Get_Res or Set_Res）か確認
+                    if parsed_frame['ESV'].upper() == expected_esv.upper():
+                        # プロパティコードが含まれているか確認
+                        if any(prop['EPC'] == property_code.upper() for prop in parsed_frame['properties']):
+                             logger.info(f"ERXUDP受信成功 (プロパティ: {property_code}): {echonet_data_hex}")
+                             return echonet_data_hex
+                    # ESVがSNA(50番台)などのエラー応答の場合
+                    elif parsed_frame['ESV'].startswith('5'):
+                        logger.warning(f"ECHONET Liteエラー応答(SNA)を受信しました: ESV={parsed_frame['ESV']}")
+                        return None # エラー応答なのでNoneを返す
+                    else:
+                        logger.debug(f"期待する応答(ESV={expected_esv})ではありませんでした: ESV={parsed_frame['ESV']}")
+                        # 他の応答は無視して待機を続ける
+            elif "FAIL" in line:
+                logger.error(f"ERXUDP待機中にFAILを受信しました: {line}")
+                return None
+        
+        logger.warning(f"ERXUDP待機タイムアウト (プロパティ: {property_code})")
+        return None
+
     def get_property(self, property_code, transaction_id=1):
         """指定したECHONET Liteプロパティの値を取得します。
 
         SKSENDTOコマンドでECHONET LiteのGet要求を送信し、ERXUDPで応答を待ち受けます。
 
         Args:
-            property_code (str): 要求するプロパティのEPCコード（16進数文字列）。
+            property_code (str): 取得するプロパティのEPCコード（16進数文字列）。
             transaction_id (int, optional): ECHONET LiteのトランザクションID。
                 Defaults to 1.
 
         Returns:
             str | None: 受信したECHONET Liteフレームのデータ部分（16進数文字列）。
-                取得に失敗した場合はNone。
+                成功応答(ESV=72)の場合にフレームを返します。失敗した場合はNone。
         """
-        # 1. PANA接続状態の確認
         if not self.connected:
             logger.error("PANAセッションが確立されていません。get_propertyをスキップします。")
             return None
 
-        # ECHONET Lite電文をバイト列(bytes)として構築
-        request_tid_hex = format(transaction_id, "04X") # TIDを比較用に保持
+        request_tid_hex = format(transaction_id, "04X")
         try:
-            # 可変部分をバイト列に変換
-            tid_bytes = transaction_id.to_bytes(2, 'big') # 2バイトのビッグエンディアン
-            property_code_byte = int(property_code, 16).to_bytes(1, 'big') # 1バイト
-
-            # ECHONET Liteフレームを構築
+            # ECHONET Lite電文をバイト列(bytes)として構築
             echonet_lite_frame_bytes = (
                 b'\x10\x81'        # EHD
-                + tid_bytes        # TID
+                + transaction_id.to_bytes(2, 'big')        # TID
                 + b'\x05\xFF\x01'  # SEOJ (送信元)
                 + b'\x02\x88\x01'  # DEOJ (宛先)
                 + b'\x62'          # ESV (Get)
                 + b'\x01'          # OPC (処理プロパティ数)
-                + property_code_byte # EPC (プロパティコード)
+                + int(property_code, 16).to_bytes(1, 'big') # EPC (プロパティコード)
                 + b'\x00'          # PDC (データカウンタ)
             )
         except Exception as e:
-            logger.error(f"ECHONET Liteフレームの構築に失敗しました: {e}")
+            logger.error(f"ECHONET Lite GETフレームの構築に失敗しました: {e}")
             return None
 
         # DATALENの計算
@@ -347,7 +390,7 @@ class SmartMeterClient:
         sksendto_response = self.send_command(full_sksendto_command, command_parts=echonet_lite_frame_bytes, expected_response="OK", wait_time=0.2, add_newline=False) # wait_timeはOK/FAIL応答受信までの時間
 
         if not sksendto_response:
-            logger.error("SKSENDTOコマンドへの応答がありませんでした。")
+            logger.error(f"SKSENDTOコマンドへの応答がありませんでした: {sksendto_response.strip()}")
             return None
         
         if "FAIL" in sksendto_response:
@@ -355,87 +398,66 @@ class SmartMeterClient:
             return None
         
         if "OK" not in sksendto_response:
-            logger.warning(f"SKSENDTOコマンドの応答がOKではありませんでした: {sksendto_response.strip()}")
+            logger.error(f"SKSENDTO(GET)コマンドの送信に失敗、またはOK応答がありませんでした: {sksendto_response.strip()}")
+            return None
 
-        # 3. ERXUDP 受信データの取得
-        response_data = ""
-        logger.info(f"ERXUDP待機開始 (プロパティ: {property_code})")
-        for i in range(20):  # 最大20秒程度待機
-            if not self.running:
-                logger.info("データ取得が中断されました。(ERXUDP 待機中)")
-                return None
-            
-            line = ""
-            if self.ser and self.ser.in_waiting > 0:
-                try:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    if line:
-                        logger.debug(f"受信 (ERXUDP 待機中 Loop {i+1}/20): {line}")
-                except Exception as e:
-                    logger.warning(f"ERXUDP 待機中のシリアル読み取りエラー: {e}")
-                    time.sleep(0.1) # 少し待って読み取り再試行
-                    continue
-            
-            if not line: # 何も受信しなかった場合
-                time.sleep(0.5)
-                continue
+        return self._wait_for_echonet_response(property_code, request_tid_hex, expected_esv='72')
 
-            if line.startswith("ERXUDP"):
-                # ERXUDP <SENDER IPADDR> <DEST IPADDR> <RPORT> <LPORT> <SENDERLLA> <SECURED> <DATALEN> <DATA>
-                parts = line.strip().split(' ')
-                if len(parts) >= 9:
-                    echonet_data_hex = parts[8]
-                    parsed_frame = parse_echonet_frame(echonet_data_hex)
+    def set_property(self, property_code, edt, transaction_id=1):
+        """指定したECHONET Liteプロパティの値を設定します (SetC)。
 
-                    if not parsed_frame:
-                        logger.warning(f"ECHONET Liteフレームのパースに失敗しました: {echonet_data_hex}")
-                        continue # 次の行を読む
+        SKSENDTOコマンドでECHONET LiteのSetC要求を送信し、ERXUDPで応答を待ち受けます。
 
-                    # TIDがリクエストと一致するか確認
-                    if parsed_frame['TID'] != request_tid_hex:
-                        logger.debug(f"TIDが不一致のためスキップ: 受信={parsed_frame['TID']}, 期待={request_tid_hex}")
-                        continue
-
-                    # ESVが応答(Get_Res)か確認
-                    if parsed_frame['ESV'] != '72':
-                        logger.warning(f"期待する応答(ESV=72)ではありませんでした: ESV={parsed_frame['ESV']}")
-                        continue
-
-                    # 要求したプロパティが含まれているか探す
-                    for prop in parsed_frame['properties']:
-                        if prop['EPC'] == property_code.upper():
-                            logger.info(f"ERXUDP受信成功 (プロパティ: {property_code}): {echonet_data_hex}")
-                            response_data = echonet_data_hex # レスポンスとしてフレーム全体を返す
-                            break # プロパティが見つかったので内側のループを抜ける
-                    
-                    if response_data:
-                        break # 応答が得られたので外側の待機ループも抜ける
-
-                else:
-                    logger.warning(f"受信したERXUDPの形式が不正です: {line}")
-
-            elif "FAIL" in line: # ERXUDP待機中にFAILを受信した場合
-                logger.error(f"ERXUDP待機中にFAILを受信しました: {line}")
-                response_data = "" # エラーなのでデータは空
-                break
-            
-            time.sleep(0.5)
-
-        if not response_data:
-            logger.warning(f"ERXUDP待機タイムアウトまたはエラー (プロパティ: {property_code})")
-
-        return response_data
-    
-    def get_meter_data(self):
-        """スマートメーターから主要な電力データをまとめて取得します。
-
-        積算電力量、瞬時電力、瞬時電流などの複数のプロパティを順次要求し、
-        結果を一つの辞書にまとめて返します。
+        Args:
+            property_code (str): 設定するプロパティのEPCコード（16進数文字列）。
+            edt (str): 設定するデータ（EDT）の16進数文字列。
+            transaction_id (int, optional): ECHONET LiteのトランザクションID。
+                Defaults to 1.
 
         Returns:
-            dict | None: 取得したデータを含む辞書。
-                タイムスタンプ以外のデータが一つも取得できなかった場合はNone。
+            str | None: 受信したECHONET Liteフレームのデータ部分（16進数文字列）。
+                成功応答(ESV=71)の場合にフレームを返します。失敗した場合はNone。
         """
+        if not self.connected:
+            logger.error("PANAセッションが確立されていません。set_propertyをスキップします。")
+            return None
+
+        request_tid_hex = format(transaction_id, "04X")
+        try:
+            # ECHONET Lite電文をバイト列(bytes)として構築
+            edt_bytes = bytes.fromhex(edt)
+            echonet_lite_frame_bytes = (
+                b'\x10\x81'        # EHD
+                + transaction_id.to_bytes(2, 'big')        # TID
+                + b'\x05\xFF\x01'  # SEOJ (送信元)
+                + b'\x02\x88\x01'  # DEOJ (宛先)
+                + b'\x61'          # ESV (SetC)
+                + b'\x01'          # OPC (処理プロパティ数)
+                + int(property_code, 16).to_bytes(1, 'big') # EPC (プロパティコード)
+                + len(edt_bytes).to_bytes(1, 'big')      # PDC (データカウンタ)
+                + edt_bytes        # EDT (データ本体)
+            )
+        except Exception as e:
+            logger.error(f"ECHONET Lite SETフレームの構築に失敗しました: {e}")
+            return None
+
+        datalen_hex_str = format(len(echonet_lite_frame_bytes), '04X')
+        full_sksendto_command = f"SKSENDTO 1 {self.ipv6_addr} 0E1A 1 {datalen_hex_str} "
+
+        sksendto_response = self.send_command(
+            full_sksendto_command, command_parts=echonet_lite_frame_bytes,
+            expected_response="OK", wait_time=0.2, add_newline=False
+        )
+
+        if not sksendto_response or "OK" not in sksendto_response:
+            response_str = sksendto_response.strip() if sksendto_response else "None"
+            logger.error(f"SKSENDTO(SET)コマンドの送信に失敗、またはOK応答がありませんでした: {response_str}")
+            return None
+
+        return self._wait_for_echonet_response(property_code, request_tid_hex, expected_esv='71')
+
+    def get_meter_data(self):
+        """スマートメーターから主要な電力データをまとめて取得します。"""
         if not self.connected:
             logger.error("スマートメーターに接続されていません")
             return None
@@ -493,15 +515,41 @@ class SmartMeterClient:
                     data.update(historical_data)
                     logger.info(f"定時積算電力量: {historical_data['historical_cumulative_power_kwh']} kWh ({historical_data['historical_timestamp']})")
 
-            # 積算電力量計測値履歴2(EC)から30分消費電力を取得
-            logger.info("積算電力量履歴2を要求中...")
-            response = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_2'], 6)
-            hex_value = parse_echonet_response(response, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_2'])
-            if hex_value:
-                recent_consumption_data = parse_recent_30min_consumption(hex_value, power_multiplier)
-                if recent_consumption_data:
-                    data.update(recent_consumption_data)
-                    logger.info(f"直近30分消費電力量: {recent_consumption_data['recent_30min_consumption_kwh']} kWh ({recent_consumption_data['recent_30min_timestamp']})")
+            # 積算電力量計測値履歴1(E2)から30分消費電力を取得
+            today_history_hex = None
+            logger.info("積算履歴収集日(E5)を「本日」に設定中...")
+            if self.set_property(ECHONET_PROPERTY_CODES['SET_CUMULATIVE_HISTORY_DAY'], '00', 6):
+                logger.info("積算電力量履歴1(E2)の「本日」分を要求中...")
+                today_history_hex = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 7)
+            else:
+                logger.warning("積算履歴収集日(E5)の「本日」設定に失敗しました。")
+
+            # まず本日分のデータだけで計算を試みる
+            consumption_data = parse_cumulative_power_history(today_history_hex, multiplier=power_multiplier)
+
+            # 計算できなかった場合（日付またぎ等）、昨日分のデータを取得して再試行
+            if not consumption_data and today_history_hex is not None:
+                logger.info("30分消費電力の計算にデータが不足している可能性があるため、昨日分の履歴を取得します。")
+                yesterday_history_hex = None
+                logger.info("積算履歴収集日(E5)を「昨日」に設定中...")
+                if self.set_property(ECHONET_PROPERTY_CODES['SET_CUMULATIVE_HISTORY_DAY'], '01', 8):
+                    logger.info("積算電力量履歴1(E2)の「昨日」分を要求中...")
+                    yesterday_history_hex = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 9)
+                else:
+                    logger.warning("積算履歴収集日(E5)の「昨日」設定に失敗しました。")
+
+                # 本日分と昨日分を合わせて再計算
+                consumption_data = parse_cumulative_power_history(
+                    today_history_hex,
+                    yesterday_edt=yesterday_history_hex,
+                    multiplier=power_multiplier
+                )
+
+            if consumption_data:
+                data.update(consumption_data)
+                logger.info(f"直近30分消費電力量: {consumption_data['recent_30min_consumption_kwh']} kWh ({consumption_data['recent_30min_timestamp']})")
+            else:
+                logger.info("最終的に30分消費電力は計算できませんでした。")
 
             return data if len(data) > 1 else None  # タイムスタンプ以外のデータがある場合のみ返す
             

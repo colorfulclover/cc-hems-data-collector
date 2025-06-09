@@ -6,7 +6,7 @@ ECHONET Liteのフレーム解析、各種電力データの数値変換、
 ヘルパー関数を提供します。
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import math
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -329,75 +329,80 @@ def parse_historical_power(hex_value, multiplier=1.0):
         logger.error(f"定時積算電力量の解析エラー: {e}, データ: {hex_value}")
         return None
 
-def parse_recent_30min_consumption(edt, multiplier=1.0):
+def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0):
     """
-    積算電力量計測値履歴2（EDT: 0xEC）を解析し、
-    直近30分間の消費電力量を計算する。
+    積算電力量計測値履歴1 (EDT: 0xE2) を解析し、直近30分間の消費電力量を計算する。
+    本日分のデータで計算できない場合、昨日分のデータを考慮する。
 
     Args:
-        edt (str): 0xECの応答データ（16進数文字列）。
+        today_edt (str): 本日(00)の0xE2応答データ。
+        yesterday_edt (str, optional): 昨日(01)の0xE2応答データ。Defaults to None.
         multiplier (float): 積算電力量に適用する単位倍率。
 
     Returns:
         dict | None: 計算結果を含む辞書、または計算不可の場合None。
-            例: {'recent_30min_consumption_kwh': 1.23, 'recent_30min_timestamp': '...'}
     """
-    if not edt:
-        return None
+    def _extract_readings(edt):
+        if not edt or len(edt) < 388:
+            logger.warning(f"積算電力量履歴(E2)のデータ長が不正です: {len(edt) if edt else 0}文字")
+            return []
+        
+        values_hex = edt[4:] # 収集日(2byte)をスキップ
+        readings = []
+        for i in range(48):
+            val_hex = values_hex[i*8 : (i+1)*8]
+            if val_hex.upper() == 'FFFFFFFE':
+                readings.append(None)
+            else:
+                readings.append(int(val_hex, 16))
+        return readings
 
     try:
-        # 基準日時 (6バイト)
-        year = int(edt[0:4], 16)
-        month = int(edt[4:6], 16)
-        day = int(edt[6:8], 16)
-        hour = int(edt[8:10], 16)
-        minute = int(edt[10:12], 16)
+        today_readings = _extract_readings(today_edt)
+        yesterday_readings = _extract_readings(yesterday_edt) if yesterday_edt else []
 
-        # 収集コマ数 (1バイト)
-        num_frames = int(edt[12:14], 16)
+        combined_readings = yesterday_readings + today_readings
 
-        # 消費量を計算するには最低2つのデータポイントが必要
-        if num_frames < 2:
-            logger.info(f"30分消費電力の計算に必要なデータポイントが不足しています (コマ数: {num_frames})")
+        latest_value = None
+        previous_value = None
+        latest_idx_abs = -1
+
+        for i in range(len(combined_readings) - 1, -1, -1):
+            if combined_readings[i] is not None:
+                if latest_value is None:
+                    latest_value = combined_readings[i]
+                    latest_idx_abs = i
+                else:
+                    previous_value = combined_readings[i]
+                    break
+        
+        if latest_value is None or previous_value is None:
+            logger.info("30分消費電力の計算に必要なデータポイントが不足しています（有効な履歴が2つ未満）")
             return None
 
-        # データ開始位置 (正方向)
-        data_start_pos = 14
+        consumption_kwh = (latest_value - previous_value) * multiplier
         
-        # 2つの最新の積算電力量 (4バイトx2)
-        v0_start = data_start_pos
-        v0_end = v0_start + 8
-        v1_start = v0_end
-        v1_end = v1_start + 8
-
-        # データ長チェック
-        if len(edt) < v1_end:
-            logger.warning(f"積算電力量履歴(EC)のデータ長が不足しています: {edt}")
-            return None
-
-        v0_raw = int(edt[v0_start:v0_end], 16)
-        v1_raw = int(edt[v1_start:v1_end], 16)
-
-        # 消費電力量を計算
-        consumption_raw = v0_raw - v1_raw
-        consumption_kwh = consumption_raw * multiplier
-
-        # タイムスタンプを生成 (UTC)
-        naive_dt = datetime(year, month, day, hour, minute, second=0)
-        tz = get_timezone()
-        local_dt = naive_dt.replace(tzinfo=tz)
-        timestamp_str = local_dt.astimezone(timezone.utc).isoformat()
+        is_today = latest_idx_abs >= 48
+        latest_idx_rel = latest_idx_abs - 48 if is_today else latest_idx_abs
         
-        # 丸め処理
+        hour = (latest_idx_rel * 30) // 60
+        minute = (latest_idx_rel * 30) % 60
+        
+        target_date = datetime.now(get_timezone()).date()
+        if not is_today:
+            target_date -= timedelta(days=1)
+            
+        naive_dt = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+        timestamp_str = naive_dt.replace(tzinfo=get_timezone()).astimezone(timezone.utc).isoformat()
+        
         if multiplier < 1:
             decimals = -int(math.log10(multiplier))
             consumption_kwh = round(consumption_kwh, decimals)
-            
+                
         return {
             'recent_30min_consumption_kwh': consumption_kwh,
             'recent_30min_timestamp': timestamp_str
         }
-
     except (ValueError, TypeError, IndexError) as e:
-        logger.error(f"積算電力量履歴(EC)の解析エラー: {e}, データ: {edt}")
+        logger.error(f"積算電力量履歴(E2)の解析エラー: {e}")
         return None
