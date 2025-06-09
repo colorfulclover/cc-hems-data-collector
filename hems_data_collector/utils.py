@@ -343,18 +343,34 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
         dict | None: 計算結果を含む辞書、または計算不可の場合None。
     """
     def _extract_readings(edt):
+        """E2のEDTから48コマの積算値リストを抽出する内部関数"""
         if not edt or len(edt) < 388:
             logger.warning(f"積算電力量履歴(E2)のデータ長が不正です: {len(edt) if edt else 0}文字")
             return []
         
-        values_hex = edt[4:] # 収集日(2byte)をスキップ
+        # 最初の2バイト(4文字)は収集日なのでスキップ
+        values_hex = edt[4:]
         readings = []
+        logger.debug("--- 積算電力量履歴(E2) データ解析開始 ---")
         for i in range(48):
-            val_hex = values_hex[i*8 : (i+1)*8]
-            if val_hex.upper() == 'FFFFFFFE':
+            val_hex = values_hex[i*8 : (i+1)*8].upper()
+            
+            hour = (i * 30) // 60
+            minute = (i * 30) % 60
+            
+            if val_hex == 'FFFFFFFE':
                 readings.append(None)
+                logger.debug(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈=データなし(None)")
             else:
-                readings.append(int(val_hex, 16))
+                try:
+                    val_int = int(val_hex, 16)
+                    readings.append(val_int)
+                    logger.debug(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈={val_int}")
+                except (ValueError, TypeError):
+                    readings.append(None)
+                    logger.warning(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈エラー(None)")
+
+        logger.debug("--- 積算電力量履歴(E2) データ解析終了 ---")
         return readings
 
     try:
@@ -414,7 +430,7 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
         latest_ts = _get_timestamp_from_index(latest_idx_abs, is_yesterday_data_present)
         previous_ts = _get_timestamp_from_index(previous_idx_abs, is_yesterday_data_present)
         
-        logger.debug(f"30分消費電力計算デバッグ:")
+        logger.debug("--- 30分消費電力計算デバッグ ---")
         logger.debug(f"  - 最新値 (時刻: {latest_ts}): {latest_value} (raw)")
         logger.debug(f"  - 前回値 (時刻: {previous_ts}): {previous_value} (raw)")
         logger.debug(f"  - 乗数: {multiplier}")

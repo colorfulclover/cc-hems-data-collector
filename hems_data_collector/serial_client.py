@@ -520,7 +520,8 @@ class SmartMeterClient:
             logger.info("積算履歴収集日(E5)を「本日」に設定中...")
             if self.set_property(ECHONET_PROPERTY_CODES['SET_CUMULATIVE_HISTORY_DAY'], '00', 6):
                 logger.info("積算電力量履歴1(E2)の「本日」分を要求中...")
-                today_history_hex = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 7)
+                today_history_frame = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 7)
+                today_history_hex = parse_echonet_response(today_history_frame, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'])
             else:
                 logger.warning("積算履歴収集日(E5)の「本日」設定に失敗しました。")
 
@@ -534,7 +535,8 @@ class SmartMeterClient:
                 logger.info("積算履歴収集日(E5)を「昨日」に設定中...")
                 if self.set_property(ECHONET_PROPERTY_CODES['SET_CUMULATIVE_HISTORY_DAY'], '01', 8):
                     logger.info("積算電力量履歴1(E2)の「昨日」分を要求中...")
-                    yesterday_history_hex = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 9)
+                    yesterday_history_frame = self.get_property(ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'], 9)
+                    yesterday_history_hex = parse_echonet_response(yesterday_history_frame, ECHONET_PROPERTY_CODES['CUMULATIVE_POWER_HISTORY_1'])
                 else:
                     logger.warning("積算履歴収集日(E5)の「昨日」設定に失敗しました。")
 
