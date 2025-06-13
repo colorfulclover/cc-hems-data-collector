@@ -58,7 +58,7 @@ DEFAULT_SCHEDULE = '*/5 * * * *'
 # デフォルトの実行間隔（秒）
 DEFAULT_INTERVAL = 300
 # デフォルトのWebhook URL
-DEFAULT_WEBHOOK_URL = "http://localhost:8000/webhook"
+DEFAULT_WEBHOOK_URL = os.environ.get('WEBHOOK_URL', "http://localhost:8000/webhook")
 # デフォルトのタイムゾーン
 LOCAL_TIMEZONE = os.environ.get('LOCAL_TIMEZONE', "Asia/Tokyo")
 
