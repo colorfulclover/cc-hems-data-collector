@@ -1,8 +1,8 @@
 # src/main.py
-"""HEMSデータ収集アプリケーションのメインモジュール。
+"""Main module of the HEMS data collection application.
 
-コマンドライン引数を解釈し、ロギングを設定し、
-SmartMeterClientを初期化してデータ取得プロセスを開始します。
+Interpreting command-line arguments, configuring logging,
+initializing SmartMeterClient and starting the data collection process.
 """
 import time
 import logging
@@ -25,84 +25,84 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args():
-    """コマンドライン引数を解析します。
+    """Parse command-line arguments.
 
     Returns:
-        argparse.Namespace: パースされたコマンドライン引数を格納したオブジェクト。
+        argparse.Namespace: Object containing parsed command-line arguments.
     """
-    parser = argparse.ArgumentParser(description='HEMSデータ取得ツール')
+    parser = argparse.ArgumentParser(description='A tool for collecting data from smart meters (HEMS)')
     
-    # 出力タイプ
+    # Output types
     parser.add_argument(
         '--output', '-o', choices=['stdout', 'file', 'gcloud', 'webhook'], 
         nargs='*', default=None, 
-        help='出力タイプを1つ以上選択 (例: --output stdout file)。(デフォルト: なし、ログ出力のみ)'
+        help='Select one or more output types (e.g., --output stdout file). (Default: None, log output only)'
     )
     
-    # 出力フォーマット
+    # Output format
     parser.add_argument('--format', '-f', choices=['json', 'yaml', 'csv'], 
-                        default='json', help='出力フォーマット (デフォルト: json)')
+                        default='json', help='Output format (Default: json)')
     
-    # ファイル出力パス
+    # File output path
     parser.add_argument('--file', default=DEFAULT_DATA_FILE, 
-                        help=f'ファイル出力パス (デフォルト: {DEFAULT_DATA_FILE})')
+                        help=f'File output path (Default: {DEFAULT_DATA_FILE})')
     
-    # Google Cloud Pub/Sub設定
+    # Google Cloud Pub/Sub settings
     parser.add_argument('--gcp-project', default=GCP_PROJECT_ID, 
-                        help=f'Google CloudプロジェクトID (デフォルト: {GCP_PROJECT_ID})')
+                        help=f'Google Cloud project ID (Default: {GCP_PROJECT_ID})')
     parser.add_argument('--gcp-topic', default=GCP_TOPIC_NAME, 
-                        help=f'Pub/Subトピック名 (デフォルト: {GCP_TOPIC_NAME})')
+                        help=f'Pub/Sub topic name (Default: {GCP_TOPIC_NAME})')
     
-    # Webhook設定
+    # Webhook settings
     parser.add_argument('--webhook-url', default=DEFAULT_WEBHOOK_URL,
-                        help=f'Webhook送信先URL (デフォルト: {DEFAULT_WEBHOOK_URL})')
+                        help=f'Webhook destination URL (Default: {DEFAULT_WEBHOOK_URL})')
     
-    # シリアルポート設定
+    # Serial port settings
     parser.add_argument('--port', default=SERIAL_PORT, 
-                        help=f'シリアルポート (デフォルト: {SERIAL_PORT})')
+                        help=f'Serial port (Default: {SERIAL_PORT})')
     parser.add_argument('--baudrate', type=int, default=SERIAL_RATE, 
-                        help=f'ボーレート (デフォルト: {SERIAL_RATE})')
+                        help=f'Baud rate (Default: {SERIAL_RATE})')
 
-    # スマートメーター情報
-    parser.add_argument('--meter-channel', type=str, help='スマートメーターのチャンネル')
-    parser.add_argument('--meter-panid', type=str, help='スマートメーターのPAN ID')
-    parser.add_argument('--meter-ipv6', type=str, help='スマートメーターのIPv6アドレス')
+    # Smart meter information
+    parser.add_argument('--meter-channel', type=str, help='Smart meter channel')
+    parser.add_argument('--meter-panid', type=str, help='Smart meter PAN ID')
+    parser.add_argument('--meter-ipv6', type=str, help='Smart meter IPv6 address')
     
-    # 実行モード設定
+    # Execution mode settings
     parser.add_argument(
         '--mode', type=str, default='schedule', choices=['schedule', 'interval'],
-        help='実行モード (デフォルト: schedule)'
+        help='Execution mode (Default: schedule)'
     )
-    # スケジュール設定
+    # Schedule settings
     parser.add_argument(
         '--schedule', '-s', type=str, default=DEFAULT_SCHEDULE,
-        help=f'データ取得スケジュール（crontab形式, scheduleモードで有効, デフォルト: "{DEFAULT_SCHEDULE}")'
+        help=f'Data collection schedule (crontab format, valid in schedule mode, Default: "{DEFAULT_SCHEDULE}")'
     )
-    # 間隔設定
+    # Interval settings
     parser.add_argument(
         '--interval', '-i', type=int, default=DEFAULT_INTERVAL,
-        help=f'データ取得間隔（秒, intervalモードで有効, デフォルト: {DEFAULT_INTERVAL})'
+        help=f'Data collection interval (seconds, valid in interval mode, Default: {DEFAULT_INTERVAL})'
     )
     
-    # ログレベル設定
+    # Log level settings
     parser.add_argument('--debug', action='store_true',
-                        help='デバッグモードを有効化（詳細なログを出力）')
+                        help='Enable debug mode (outputs detailed logs)')
     
-    # バージョン情報
+    # Version information
     parser.add_argument('--version', '-v', action='version', version=f'%(prog)s {VERSION}',
-                        help='バージョン情報を表示して終了します')
+                        help='Display version information and exit')
 
     return parser.parse_args()
 
 
 def setup_output_handlers(args):
-    """コマンドライン引数に基づいて出力ハンドラのリストをセットアップします。
+    """Set up a list of output handlers based on command-line arguments.
 
     Args:
-        args (argparse.Namespace): パースされたコマンドライン引数。
+        args (argparse.Namespace): Parsed command-line arguments.
 
     Returns:
-        list[OutputHandler]: セットアップされたOutputHandlerのインスタンスのリスト。
+        list[OutputHandler]: List of configured OutputHandler instances.
     """
     output_handlers = []
     
@@ -125,7 +125,7 @@ def setup_output_handlers(args):
             from google.cloud import pubsub_v1
             output_handlers.append(OutputHandler('gcloud', 'json', project_id=args.gcp_project, topic_name=args.gcp_topic))
         except ImportError:
-            logger.error("Google Cloud Pub/Sub機能が利用できません。パッケージをインストールしてください: pip install google-cloud-pubsub")
+            logger.error("Google Cloud Pub/Sub feature is not available. Please install the package: pip install google-cloud-pubsub")
 
     if 'webhook' in args.output:
         output_handlers.append(OutputHandler('webhook', 'json', webhook_url=args.webhook_url))
@@ -134,21 +134,21 @@ def setup_output_handlers(args):
 
 
 def main():
-    """アプリケーションのメイン実行関数。
-    
-    引数解析、ロギング設定、出力ハンドラとクライアントの初期化を行い、
-    データ取得のメインループを開始します。
+    """Main execution function of the application.
+
+    Parses arguments, configures logging, initializes output handlers and client,
+    and starts the main data collection loop.
     """
     args = parse_args()
     
-    # ロギングを設定
+    # Configure logging
     setup_logger(args.debug)
-    logger.info("hems_data_collector を起動します")
-    
+    logger.info("Starting hems_data_collector")
+
     if args.debug:
-        logger.info("デバッグモードが有効になりました")
+        logger.info("Debug mode enabled")
     
-    # 出力ハンドラの作成
+    # Create output handlers
     output_handlers = setup_output_handlers(args)
     
     client = SmartMeterClient(
@@ -161,95 +161,95 @@ def main():
     )
     
     try:
-        # 出力スレッドを開始
+        # Start output thread
         client.start_output_thread()
         
-        # 初期化とスマートメーターへの接続
+        # Initialize and connect to smart meter
         if not client.initialize():
-            logger.error("初期化に失敗しました。プログラムを終了します。")
+            logger.error("Initialization failed. Exiting program.")
             return
         
-        # 定期的にデータを取得
+        # Periodically retrieve data
         if args.mode == 'schedule':
-            # スケジュールモード
+            # Schedule mode
             base_time = datetime.now(timezone.utc)
             try:
                 cron = croniter(args.schedule, base_time)
-                logger.info(f"スケジュールモードで実行します。スケジュール: '{args.schedule}'")
+                logger.info(f"Running in schedule mode. Schedule: '{args.schedule}'")
             except ValueError as e:
-                logger.error(f"不正なcron形式のスケジュールです: {args.schedule} - {e}")
+                logger.error(f"Invalid cron format schedule: {args.schedule} - {e}")
                 return
 
             while client.running:
-                # 次の実行時刻まで待機
+                # Wait until next execution time
                 next_run_datetime = cron.get_next(datetime)
                 wait_seconds = (next_run_datetime - datetime.now(timezone.utc)).total_seconds()
                 
                 if wait_seconds > 0:
-                    logger.info(f"次の実行は {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} です。({wait_seconds:.1f}秒後)")
+                    logger.info(f"Next execution at {next_run_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')} ({wait_seconds:.1f} seconds later)")
                     sleep_end = time.time() + wait_seconds
                     while time.time() < sleep_end:
                         if not client.running:
-                            # スリープ中に停止した場合、ループを抜ける
+                            # If stopped during sleep, exit the loop
                             break
                         time.sleep(min(1, sleep_end - time.time()))
                 
                 if not client.running:
-                    logger.info("クライアントが停止しました。")
+                    logger.info("Client has stopped.")
                     break
 
-                # データ取得
+                # Retrieve data
                 try:
                     meter_data = client.get_meter_data()
                     if meter_data:
                         client.data_queue.put(meter_data)
-                        logger.info(f"データを取得しました: {meter_data}")
+                        logger.info(f"Data retrieved: {meter_data}")
                     else:
-                        logger.info("データが取得できませんでした。")
+                        logger.info("No data could be retrieved.")
                 except Exception as e:
-                    logger.error(f"データ取得中にエラーが発生しました: {e}")
+                    logger.error(f"Error occurred during data retrieval: {e}")
 
         elif args.mode == 'interval':
-            # インターバルモード
-            logger.info(f"インターバルモードで実行します。間隔: {args.interval}秒")
+            # Interval mode
+            logger.info(f"Running in interval mode. Interval: {args.interval} seconds")
             while client.running:
                 if not client.running:
-                    logger.info("クライアントが停止しました。")
+                    logger.info("Client has stopped.")
                     break
 
-                # データ取得
+                # Retrieve data
                 try:
                     meter_data = client.get_meter_data()
                     if meter_data:
-                        # データキューに追加
+                        # Add to data queue
                         client.data_queue.put(meter_data)
-                        logger.info(f"データを取得しました: {meter_data}")
+                        logger.info(f"Data retrieved: {meter_data}")
                     else:
-                        logger.info("データが取得できませんでした。")
-                
+                        logger.info("No data could be retrieved.")
+
                 except KeyboardInterrupt:
                         raise
                 except Exception as e:
-                    logger.error(f"データ取得中にエラーが発生しました: {e}")
+                    logger.error(f"Error occurred during data retrieval: {e}")
 
-                # 指定間隔待機
-                logger.info(f"{args.interval}秒後に再度データを取得します...")
+                # Wait for specified interval
+                logger.info(f"Will retrieve data again in {args.interval} seconds...")
                 sleep_end = time.time() + args.interval
                 while time.time() < sleep_end:
                     if not client.running:
-                        # スリープ中に停止した場合、ループを抜ける
+                        # If stopped during sleep, exit the loop
                         break
                     time.sleep(min(1, sleep_end - time.time()))
 
     except KeyboardInterrupt:
-        logger.info("プログラムを終了します...")
+        logger.info("Exiting program...")
     except Exception as e:
-        logger.error(f"予期せぬエラーが発生しました: {e}", exc_info=True)
+        logger.error(f"Unexpected error occurred: {e}", exc_info=True)
         traceback.print_exc()
     finally:
         client.stop_output_thread()
         client.close_connection()
-        logger.info("クリーンアップを完了し、プログラムを終了しました。")
+        logger.info("Cleanup completed and program terminated.")
 
 
 if __name__ == "__main__":

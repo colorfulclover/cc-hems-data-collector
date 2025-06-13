@@ -1,8 +1,8 @@
 # src/output_handler.py
-"""取得した電力データの出力処理を担当するモジュール。
+"""Module responsible for outputting collected power data.
 
-さまざまな形式（標準出力、ファイル、Google Cloud Pub/Sub, Webhook）で
-電力消費量データを出力するためのハンドラを提供します。
+Provides handlers for outputting power consumption data in various formats
+(standard output, file, Google Cloud Pub/Sub, Webhook).
 """
 import os
 import logging
@@ -16,36 +16,36 @@ from hems_data_collector.config import CSV_HEADERS
 logger = logging.getLogger(__name__)
 
 class OutputHandler:
-    """データ出力処理を行うクラス。
-    
+    """Class for handling data output processing.
+
     Attributes:
-        output_type (str): 出力タイプ ('stdout', 'file', 'gcloud', 'webhook')。
-        output_format (str): 出力フォーマット ('json', 'yaml', 'csv')。
-        filepath (str): ファイル出力時のパス。
-        project_id (str): Google CloudプロジェクトID。
-        topic_name (str): Pub/Subトピック名。
-        publisher (pubsub_v1.PublisherClient): Pub/Subクライアント。
-        topic_path (str): Pub/Subトピックのフルパス。
-        webhook_url (str): Webhookの送信先URL。
+        output_type (str): Output type ('stdout', 'file', 'gcloud', 'webhook').
+        output_format (str): Output format ('json', 'yaml', 'csv').
+        filepath (str): Path for file output.
+        project_id (str): Google Cloud project ID.
+        topic_name (str): Pub/Sub topic name.
+        publisher (pubsub_v1.PublisherClient): Pub/Sub client.
+        topic_path (str): Full path of the Pub/Sub topic.
+        webhook_url (str): Destination URL for webhook.
     """
     
     def __init__(self, output_type, output_format='json', filepath=None, 
                  project_id=None, topic_name=None, webhook_url=None):
-        """OutputHandlerを初期化します。
+        """Initialize the OutputHandler.
 
         Args:
-            output_type (str): 出力タイプ ('stdout', 'file', 'gcloud', 'webhook')。
-            output_format (str, optional): 出力フォーマット ('json', 'yaml', 'csv')。
-                'gcloud' または 'webhook' タイプの場合は 'json' に固定されます。
+            output_type (str): Output type ('stdout', 'file', 'gcloud', 'webhook').
+            output_format (str, optional): Output format ('json', 'yaml', 'csv').
+                For 'gcloud' or 'webhook' types, this is fixed to 'json'.
                 Defaults to 'json'.
-            filepath (str, optional): ファイル出力先のパス。
-                'file' タイプの場合に必要です。Defaults to None.
-            project_id (str, optional): Google CloudプロジェクトID。
-                'gcloud' タイプの場合に必要です。Defaults to None.
-            topic_name (str, optional): Pub/Subトピック名。
-                'gcloud' タイプの場合に必要です。Defaults to None.
-            webhook_url (str, optional): Webhookの送信先URL。
-                'webhook' タイプの場合に必要です。Defaults to None.
+            filepath (str, optional): Path for file output.
+                Required for 'file' type. Defaults to None.
+            project_id (str, optional): Google Cloud project ID.
+                Required for 'gcloud' type. Defaults to None.
+            topic_name (str, optional): Pub/Sub topic name.
+                Required for 'gcloud' type. Defaults to None.
+            webhook_url (str, optional): Destination URL for webhook.
+                Required for 'webhook' type. Defaults to None.
         """
         self.type = output_type
         self.format = output_format
@@ -57,7 +57,7 @@ class OutputHandler:
         self.topic_path = None
         self.headers = {'Content-Type': 'application/json'}
         
-        # Google Cloud Pub/Sub クライアントの初期化
+        # Initialize Google Cloud Pub/Sub client
         if self.type == 'gcloud':
             try:
                 from google.cloud import pubsub_v1
@@ -66,17 +66,17 @@ class OutputHandler:
             except ImportError:
                 self.publisher = None
                 self.topic_path = None
-                logger.error("google-cloud-pubsubがインストールされていません。")
+                logger.error("google-cloud-pubsub is not installed.")
             except Exception as e:
                 self.publisher = None
                 self.topic_path = None
-                logger.error(f"Pub/Subクライアントの初期化に失敗しました: {e}")
+                logger.error(f"Failed to initialize Pub/Sub client: {e}")
 
     def output(self, data):
-        """データを指定された形式と場所に出力します。
+        """Output data in the specified format and destination.
 
         Args:
-            data (dict): 出力する電力データ。
+            data (dict): Power data to be output.
         """
         try:
             data_str = self._get_formatted_string(data)
@@ -92,16 +92,16 @@ class OutputHandler:
             elif self.type == 'webhook':
                 self._output_to_webhook(data_str)
         except Exception as e:
-            logger.error(f"{self.type}への出力中にエラーが発生しました: {e}")
+            logger.error(f"Error occurred during output to {self.type}: {e}")
 
     def _get_formatted_string(self, data):
-        """データを指定されたフォーマットの文字列に変換します。"""
+        """Convert data to a string in the specified format."""
         if self.format == 'json':
             return json.dumps(data)
         elif self.format == 'yaml':
             return yaml.dump(data, default_flow_style=False)
         elif self.format == 'csv':
-            # ヘッダーが存在しない場合やファイルが空の場合にヘッダーを書き込む
+            # Write headers if file doesn't exist or is empty
             if self.filepath and (not os.path.exists(self.filepath) or os.path.getsize(self.filepath) == 0):
                 self._output_to_file(','.join(CSV_HEADERS), append=False)
             
@@ -121,38 +121,38 @@ class OutputHandler:
         return None
 
     def _output_to_file(self, data_str, append=True):
-        """ファイルに文字列を書き込みます。"""
+        """Write string to a file."""
         mode = 'a' if append else 'w'
         try:
             with open(self.filepath, mode, encoding='utf-8') as f:
                 f.write(data_str + '\n')
-            logger.info(f"ファイルにデータを書き込みました: {self.filepath}")
+            logger.info(f"Data written to file: {self.filepath}")
         except IOError as e:
-            logger.error(f"ファイル書き込みエラー ({self.filepath}): {e}")
+            logger.error(f"File write error ({self.filepath}): {e}")
 
     def _output_to_gcloud(self, data_str):
-        """データをGoogle Cloud Pub/Subに送信します。"""
+        """Send data to Google Cloud Pub/Sub."""
         if not self.publisher or not self.topic_path:
-            logger.error("Pub/Subクライアントが初期化されていません。")
+            logger.error("Pub/Sub client is not initialized.")
             return
-        
+
         future = self.publisher.publish(self.topic_path, data_str.encode('utf-8'))
-        future.result()  # 送信完了を待機
-        logger.info(f"Google Cloud Pub/Subトピックにメッセージを送信しました: {self.topic_path}")
+        future.result()  # Wait for sending to complete
+        logger.info(f"Message sent to Google Cloud Pub/Sub topic: {self.topic_path}")
     
     def _output_to_webhook(self, data_str):
-        """データをJSONとしてWebhookにPOST送信します。
+        """POST data as JSON to a webhook.
 
         Args:
-            data_str (str): 送信するJSON文字列。
+            data_str (str): JSON string to send.
         """
         if not self.webhook_url:
-            logger.error("Webhook URLが設定されていません。")
+            logger.error("Webhook URL is not set.")
             return
-        
+
         try:
             response = requests.post(self.webhook_url, data=data_str, headers=self.headers, timeout=10)
-            response.raise_for_status()  # 2xx以外のステータスコードで例外を発生
-            logger.info(f"Webhookにデータを送信しました: {self.webhook_url} (ステータス: {response.status_code})")
+            response.raise_for_status()  # Raises exception for non-2xx status codes
+            logger.info(f"Data sent to webhook: {self.webhook_url} (status: {response.status_code})")
         except requests.exceptions.RequestException as e:
-            logger.error(f"Webhookへの送信に失敗しました: {e}")
+            logger.error(f"Failed to send to webhook: {e}")
