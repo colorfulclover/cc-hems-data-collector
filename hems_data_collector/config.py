@@ -22,7 +22,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # アプリケーションのバージョン
-VERSION = "0.1.0"
+try:
+    # パッケージがインストールされている場合
+    from importlib.metadata import version
+    try:
+        VERSION = version("hems-data-collector")
+    except:
+        # 開発環境の場合、直接scmから取得を試みる
+        try:
+            from setuptools_scm import get_version
+            VERSION = get_version(root='..', relative_to=__file__)
+        except Exception as e:
+            logger.debug(f"setuptools_scmからバージョンを取得できませんでした: {e}")
+            VERSION = "開発版"  # 最終フォールバック
+except ImportError:
+    VERSION = "開発版"  # フォールバック
 
 # シリアル通信設定
 SERIAL_PORT = os.environ.get('SERIAL_PORT', '/dev/ttyUSB0')  # USBトングルのシリアルポート（環境に合わせて変更）
