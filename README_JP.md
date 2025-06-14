@@ -70,6 +70,8 @@ CSV形式の場合も、これらのキーがヘッダーとして使用され�
 
 ## インストール
 
+### 手動インストール
+
 1.  リポジトリをクローンします。
     ```bash
     git clone https://github.com/colorfulclover/cc-hems-data-collector.git
@@ -90,6 +92,27 @@ CSV形式の場合も、これらのキーがヘッダーとして使用され�
     ```bash
     pip install -e '.[gcloud]'
     ```
+
+### サービスとしてのインストール
+
+Linuxシステムでは、HEMS Data Collectorをsystemdサービスとしてインストールして自動起動と管理を行うことができます：
+
+1. 提供されているサービス管理スクリプトを使用します：
+   ```bash
+   sudo ./service-manager.sh install
+   ```
+   このコマンドは以下を含むセットアッププロセスをガイドします：
+   - シリアルポートの設定
+   - Bルート認証設定
+   - 出力先の選択（ファイル、webhook、またはGoogle Cloud）
+   - タイムゾーン設定
+
+2. あるいは、より簡単なコマンドを使用するためにMakefileを使用することもできます：
+   ```bash
+   make install
+   ```
+
+サービスインストールは、専用ユーザーの作成、必要なディレクトリの設定、そしてアプリケーションをsystemdサービスとして実行するための設定を行います。
 
 ## 設定
 
@@ -160,6 +183,29 @@ hems-data-collector [OPTIONS]
   ```bash
   hems-data-collector --output stdout --debug
   ```
+
+### サービス管理
+
+アプリケーションをサービスとしてインストールした場合、以下のコマンドで管理できます：
+
+```bash
+# サービスの状態確認
+sudo ./service-manager.sh status
+# または
+make status
+
+# サービス設定の更新
+sudo ./service-manager.sh update
+# または
+make update
+
+# サービスのアンインストール
+sudo ./service-manager.sh uninstall
+# または
+make uninstall
+```
+
+サービスはシステム起動時に自動的に開始され、障害が発生した場合は再起動します。
 
 ### コマンドラインオプション
 

@@ -70,6 +70,8 @@ Instantaneous current keys are standardized for both single-phase and three-phas
 
 ## Installation
 
+### Manual Installation
+
 1.  Clone the repository.
     ```bash
     git clone https://github.com/colorfulclover/cc-hems-data-collector.git
@@ -90,6 +92,27 @@ Instantaneous current keys are standardized for both single-phase and three-phas
     ```bash
     pip install -e '.[gcloud]'
     ```
+
+### Service Installation
+
+For Linux systems, you can install HEMS Data Collector as a systemd service for automatic startup and management:
+
+1. Use the provided service management script:
+   ```bash
+   sudo ./service-manager.sh install
+   ```
+   This will guide you through the setup process, including:
+   - Serial port configuration
+   - B-route authentication settings
+   - Output destination selection (file, webhook, or Google Cloud)
+   - Timezone configuration
+
+2. Alternatively, you can use the Makefile for simpler commands:
+   ```bash
+   make install
+   ```
+
+The service installation creates a dedicated user, sets up required directories, and configures the application to run as a systemd service.
 
 ## Configuration
 
@@ -160,6 +183,29 @@ hems-data-collector [OPTIONS]
   ```bash
   hems-data-collector --output stdout --debug
   ```
+
+### Service Management
+
+If you installed the application as a service, you can manage it using the following commands:
+
+```bash
+# Check service status
+sudo ./service-manager.sh status
+# or
+make status
+
+# Update service configuration
+sudo ./service-manager.sh update
+# or
+make update
+
+# Uninstall the service
+sudo ./service-manager.sh uninstall
+# or
+make uninstall
+```
+
+The service automatically starts at system boot and restarts on failure.
 
 ### Command-Line Options
 
