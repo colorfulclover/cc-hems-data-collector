@@ -41,10 +41,6 @@ update_service() {
       # サービスファイル再生成
       generate_service_file "$UPDATED_OUTPUT_TYPE" "$UPDATED_FILE_FORMAT"
     fi
-  else
-    # Load current settings
-    settings=$(load_settings_from_env)
-    IFS=',' read -r output_format output_choice webhook_url gcp_project_id gcp_topic_name <<< "$settings"
   fi
 
   # Update dependencies
