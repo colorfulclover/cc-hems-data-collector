@@ -150,7 +150,7 @@ collect_settings() {
   done
 
   # Output type selection
-  echo "\nPlease select the data output destination:"
+  echo -e "\nPlease select the data output destination:"
   echo "1) File output (default)"
   echo "2) Webhook"
   echo "3) Google Cloud Pub/Sub"
@@ -196,8 +196,16 @@ collect_settings() {
   read -p "Timezone [Asia/Tokyo]: " timezone
   timezone=${timezone:-Asia/Tokyo}
 
-  # 設定値を返す
-  echo "${serial_port},${serial_rate},${b_route_id},${b_route_password},${output_choice},${webhook_url},${gcp_project_id},${gcp_topic_name},${timezone}"
+  # Export settings to global variables
+  SETTINGS_SERIAL_PORT="${serial_port}"
+  SETTINGS_SERIAL_RATE="${serial_rate}"
+  SETTINGS_B_ROUTE_ID="${b_route_id}"
+  SETTINGS_B_ROUTE_PASSWORD="${b_route_password}"
+  SETTINGS_OUTPUT_CHOICE="${output_choice}"
+  SETTINGS_WEBHOOK_URL="${webhook_url}"
+  SETTINGS_GCP_PROJECT_ID="${gcp_project_id}"
+  SETTINGS_GCP_TOPIC_NAME="${gcp_topic_name}"
+  SETTINGS_TIMEZONE="${timezone}"
 }
 
 # Update settings
@@ -206,98 +214,58 @@ update_settings() {
   source "${INSTALL_DIR}/.env"
 
   # Output type selection
-  echo "\nPlease select the data output destination:"
+  echo -e "\nPlease select the data output destination:"
   echo "1) File output"
   echo "2) Webhook"
   echo "3) Google Cloud Pub/Sub"
   read -p "Selection [1-3]: " output_choice
+  output_choice=${output_choice:-1}
 
 
   # Additional settings according to the selected output type
+  local output_type
   case $output_choice in
     1)
       echo "File output selected."
+      output_type="file"
 
       # Update environment variables
       sed -i '/WEBHOOK_URL=/d' "${INSTALL_DIR}/.env"
       sed -i '/GCP_PROJECT_ID=/d' "${INSTALL_DIR}/.env"
       sed -i '/GCP_TOPIC_NAME=/d' "${INSTALL_DIR}/.env"
-      ;
-      webhook_url=""
-      gcp_project_id=""
-      gcp_topic_name=""
       ;;
     2)
       echo "Webhook output selected."
+      output_type="webhook"
       read -p "Webhook URL [${WEBHOOK_URL:-}]: " webhook_url
       webhook_url=${webhook_url:-${WEBHOOK_URL:-}}
+      sed -i "s|^WEBHOOK_URL=.*|WEBHOOK_URL=${webhook_url}|" "${INSTALL_DIR}/.env"
 
       # Update environment variables
       sed -i '/GCP_PROJECT_ID=/d' "${INSTALL_DIR}/.env"
       sed -i '/GCP_TOPIC_NAME=/d' "${INSTALL_DIR}/.env"
-      gcp_project_id=""
-      gcp_topic_name=""
       ;;
     3)
       echo "Google Cloud Pub/Sub output selected."
+      output_type="gcloud"
       read -p "GCP Project ID [${GCP_PROJECT_ID:-}]: " gcp_project_id
       gcp_project_id=${gcp_project_id:-${GCP_PROJECT_ID:-}}
+      sed -i "s|^GCP_PROJECT_ID=.*|GCP_PROJECT_ID=${gcp_project_id}|" "${INSTALL_DIR}/.env"
+
       read -p "Pub/Sub topic name [${GCP_TOPIC_NAME:-hems-data}]: " gcp_topic_name
       gcp_topic_name=${gcp_topic_name:-${GCP_TOPIC_NAME:-hems-data}}
+      sed -i "s|^GCP_TOPIC_NAME=.*|GCP_TOPIC_NAME=${gcp_topic_name}|" "${INSTALL_DIR}/.env"
 
       # Update environment variables
       sed -i '/WEBHOOK_URL=/d' "${INSTALL_DIR}/.env"
-      webhook_url=""
       ;;
     *)
-      echo "Output settings were not changed."
-      return 1
+      echo "Invalid selection. Using default file output."
+      output_type="file"
       ;;
   esac
 
-  # Convert output type to string
-  local output_type="file"
-  case $output_choice in
-    2) output_type="webhook" ;;
-    3) output_type="gcloud" ;;
-    *) output_type="file" ;;
-  esac
-
-
-  # Add output type specific settings
-  case $output_choice in
-    2)
-      if grep -q "WEBHOOK_URL=" "${INSTALL_DIR}/.env"; then
-        sed -i "s|WEBHOOK_URL=.*|WEBHOOK_URL=${webhook_url}|" "${INSTALL_DIR}/.env"
-      else
-        echo "WEBHOOK_URL=${webhook_url}" >> "${INSTALL_DIR}/.env"
-      fi
-      ;;
-    3)
-      if grep -q "GCP_PROJECT_ID=" "${INSTALL_DIR}/.env"; then
-        sed -i "s/GCP_PROJECT_ID=.*/GCP_PROJECT_ID=${gcp_project_id}/" "${INSTALL_DIR}/.env"
-      else
-        echo "GCP_PROJECT_ID=${gcp_project_id}" >> "${INSTALL_DIR}/.env"
-      fi
-      if grep -q "GCP_TOPIC_NAME=" "${INSTALL_DIR}/.env"; then
-        sed -i "s/GCP_TOPIC_NAME=.*/GCP_TOPIC_NAME=${gcp_topic_name}/" "${INSTALL_DIR}/.env"
-      else
-        echo "GCP_TOPIC_NAME=${gcp_topic_name}" >> "${INSTALL_DIR}/.env"
-      fi
-      ;;
-  esac
-
-  echo "Output settings have been updated."
-
-  # サービスファイルを再生成
-  generate_service_file "$output_type"
-
-  # Reload systemd configuration
-  systemctl daemon-reload
-  echo "Service configuration file has been updated. Please restart the service."
-
-  # 設定値を返す
-  echo "${output_choice},${webhook_url},${gcp_project_id},${gcp_topic_name}"
+  UPDATED_OUTPUT_TYPE="${output_type}"
 }
 
 # Load settings from environment variables
@@ -342,4 +310,10 @@ show_service_info() {
   echo ""
   echo "Start service: sudo systemctl start ${SERVICE_NAME}"
   echo "Enable autostart: sudo systemctl enable ${SERVICE_NAME}"
+}
+
+# Install service dependencies
+install_dependencies() {
+  # Implementation of install_dependencies function
+  echo "Installing service dependencies..."
 }

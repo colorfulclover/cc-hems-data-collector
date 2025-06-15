@@ -57,14 +57,12 @@ install_service() {
     echo "Creating environment variable settings file..."
 
     # Collect settings
-    settings=$(collect_settings)
-    IFS=',' read -r serial_port serial_rate b_route_id b_route_password output_format \
-                 output_choice webhook_url gcp_project_id gcp_topic_name timezone <<< "$settings"
+    collect_settings
 
     # Create environment variables file
-    create_env_file "$serial_port" "$serial_rate" "$b_route_id" "$b_route_password" \
-                   "$output_format" "$output_choice" "$webhook_url" "$gcp_project_id" \
-                   "$gcp_topic_name" "$timezone"
+    create_env_file "$SETTINGS_SERIAL_PORT" "$SETTINGS_SERIAL_RATE" "$SETTINGS_B_ROUTE_ID" \
+                   "$SETTINGS_B_ROUTE_PASSWORD" "$SETTINGS_OUTPUT_CHOICE" "$SETTINGS_WEBHOOK_URL" \
+                   "$SETTINGS_GCP_PROJECT_ID" "$SETTINGS_GCP_TOPIC_NAME" "$SETTINGS_TIMEZONE"
   fi
 
   # Generate service file

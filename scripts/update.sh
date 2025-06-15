@@ -36,12 +36,10 @@ update_service() {
     cp "${INSTALL_DIR}/.env" "${INSTALL_DIR}/.env.bak"
 
     # Update settings
-    updated_settings=$(update_settings)
+    update_settings
     if [ $? -eq 0 ]; then
-      IFS=',' read -r output_format output_choice webhook_url gcp_project_id gcp_topic_name <<< "$updated_settings"
-
       # サービスファイル再生成
-      generate_service_file
+      generate_service_file "$UPDATED_OUTPUT_TYPE"
     fi
   else
     # Load current settings
@@ -60,7 +58,7 @@ update_service() {
   fi
 
   # Regenerate service file (even if no changes)
-  generate_service_file
+  # generate_service_file
 
   # Reload systemd
   systemctl daemon-reload
