@@ -25,11 +25,11 @@ install_service() {
   if [ ! -d "${INSTALL_DIR}" ]; then
     echo "Installing application to ${INSTALL_DIR}..."
     mkdir -p "${INSTALL_DIR}"
-    cp -r "${PROJECT_DIR}"/* "${INSTALL_DIR}"/
+    cp -a "${PROJECT_DIR}"/. "${INSTALL_DIR}"/
     chown -R hems-data-collector:hems-data-collector "${INSTALL_DIR}"
   else
     echo "Application directory already exists. Updating..."
-    cp -r "${PROJECT_DIR}"/* "${INSTALL_DIR}"/
+    cp -a "${PROJECT_DIR}"/. "${INSTALL_DIR}"/
     chown -R hems-data-collector:hems-data-collector "${INSTALL_DIR}"
   fi
 

@@ -26,7 +26,7 @@ update_service() {
 
   # Update application directory
   echo "Updating application..."
-  cp -r "${PROJECT_DIR}"/* "${INSTALL_DIR}"/
+  cp -a "${PROJECT_DIR}"/. "${INSTALL_DIR}"/
   chown -R hems-data-collector:hems-data-collector "${INSTALL_DIR}"
 
   # Check if output settings should be changed
