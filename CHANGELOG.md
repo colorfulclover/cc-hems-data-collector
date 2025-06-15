@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.0] - 2025-06-15
+
+### Added
+- **Interactive Management Scripts**: Introduced `service-manager.sh` for easy, interactive installation, updates, and uninstallation of the service.
+- **Makefile Support**: Added a `Makefile` to provide simple, one-word commands (`make install`, `make status`, etc.) for service management.
+- **File Format Selection**: Users can now choose between `csv` and `json` formats for file-based output during installation and updates.
+
+### Changed
+- **Installation Process**: The installation flow has been significantly improved to be more robust and user-friendly, centered around the `service-manager.sh` script.
+- **Configuration Update Logic**: The update process no longer reads from `.env` files and instead overwrites previous settings to ensure a predictable state.
+- **Script Architecture**: Refactored shell scripts to eliminate dependencies on `.env` files for core logic, improving reliability.
+
+### Fixed
+- **Version Detection**: Corrected the file copy mechanism to include the `.git` directory, fixing `setuptools-scm` version detection errors during installation.
+- **Interactive Prompt Display**: Resolved a bug where prompts in shell scripts were not displayed when their output was redirected.
+- **Service File Generation**: Ensured that the `systemd` service file is always generated with the correct command-line arguments based on the user's selections.
+
 ## [0.1.0] - 2025-06-09
 
 ### Added
