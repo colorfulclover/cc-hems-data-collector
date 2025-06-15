@@ -1,9 +1,9 @@
 # src/utils.py
-"""データ解析とユーティリティ関数。
+"""Data analysis and utility functions.
 
-ECHONET Liteのフレーム解析、各種電力データの数値変換、
-タイムスタンプ生成など、プロジェクト全体で利用される
-ヘルパー関数を提供します。
+Provides helper functions used throughout the project,
+including ECHONET Lite frame analysis, power data conversions,
+and timestamp generation.
 """
 import logging
 from datetime import datetime, timezone, timedelta
@@ -20,21 +20,21 @@ def get_timezone():
         try:
             return ZoneInfo(LOCAL_TIMEZONE)
         except ZoneInfoNotFoundError:
-            logger.error(f"指定されたタイムゾーンが無効です: {LOCAL_TIMEZONE}. UTCを使用します。")
+            logger.error(f"Specified timezone is invalid: {LOCAL_TIMEZONE}. Using UTC.")
             return timezone.utc
     else:
         return timezone.utc
 
 def parse_echonet_frame(frame_hex_str: str) -> dict | None:
-    """ECHONET Liteのフレーム(16進数文字列)を辞書にパースします。
+    """Parse ECHONET Lite frame (hexadecimal string) into a dictionary.
 
     Args:
-        frame_hex_str (str): パース対象のECHONET Liteフレーム（16進数文字列）。
+        frame_hex_str (str): ECHONET Lite frame (hexadecimal string) to be parsed.
 
     Returns:
-        dict | None: パースされたフレーム情報を格納した辞書。
-            パースに失敗した場合はNone。
-            辞書の構造:
+        dict | None: Dictionary containing parsed frame information.
+            Returns None if parsing fails.
+            Dictionary structure:
             {
                 'EHD': str, 'TID': str, 'SEOJ': str, 'DEOJ': str,
                 'ESV': str, 'OPC': int,
@@ -42,7 +42,7 @@ def parse_echonet_frame(frame_hex_str: str) -> dict | None:
             }
     """
     if not frame_hex_str or len(frame_hex_str) < 24: # EHD+TID+SEOJ+DEOJ+ESV+OPC = 12 bytes = 24 chars
-        logger.warning(f"短すぎる、または不正なECHONET Liteフレームです: {frame_hex_str}")
+        logger.warning(f"Too short or invalid ECHONET Lite frame: {frame_hex_str}")
         return None
 
     try:
@@ -57,28 +57,28 @@ def parse_echonet_frame(frame_hex_str: str) -> dict | None:
         }
 
         if data['EHD'] != '1081':
-            logger.warning(f"不正なECHONET Liteヘッダです: {data['EHD']}")
+            logger.warning(f"Invalid ECHONET Lite header: {data['EHD']}")
             return None
 
-        # ESVがエラー応答(SNA)かチェック
+        # Check if ESV is an error response (SNA)
         if data['ESV'].startswith('5'):
-             logger.warning(f"ESVがエラー応答(SNA)を示しています: {data['ESV']}. フレーム: {frame_hex_str}")
+             logger.warning(f"ESV indicates error response (SNA): {data['ESV']}. Frame: {frame_hex_str}")
 
         # OPCに基づいてプロパティをパース
         current_pos = 24
         for _ in range(data['OPC']):
             if len(frame_hex_str) < current_pos + 4: # EPC(2) + PDC(2)
-                logger.error("フレームが短いためプロパティをパースできません。")
+                logger.error("Frame is too short to parse properties.")
                 break
-            
+
             epc = frame_hex_str[current_pos : current_pos+2]
             pdc = int(frame_hex_str[current_pos+2 : current_pos+4], 16)
-            
+
             edt_start = current_pos + 4
             edt_end = edt_start + (pdc * 2)
 
             if len(frame_hex_str) < edt_end:
-                logger.error(f"フレームが短いためEDTをパースできません。EPC: {epc}, PDC: {pdc}")
+                logger.error(f"Frame is too short to parse EDT. EPC: {epc}, PDC: {pdc}")
                 break
             
             edt = frame_hex_str[edt_start:edt_end]
@@ -93,19 +93,19 @@ def parse_echonet_frame(frame_hex_str: str) -> dict | None:
         return data
 
     except (ValueError, IndexError) as e:
-        logger.error(f"ECHONET Liteフレームのパース中にエラーが発生しました: {e}。フレーム: {frame_hex_str}")
+        logger.error(f"Error occurred while parsing ECHONET Lite frame: {e}. Frame: {frame_hex_str}")
         return None
 
 def parse_echonet_response(response, property_code):
-    """ECHONET Liteの応答から指定したプロパティのEDT値を抽出します。
+    """Extract the EDT value of the specified property from an ECHONET Lite response.
 
     Args:
-        response (str): ERXUDPから受信したECHONET Liteフレーム（16進数文字列）。
-        property_code (str): 抽出したいプロパティのEPCコード（16進数文字列）。
+        response (str): ECHONET Lite frame (hexadecimal string) received from ERXUDP.
+        property_code (str): EPC code (hexadecimal string) of the property to be extracted.
 
     Returns:
-        str | None: 見つかったプロパティのEDT（データ）部分の文字列。
-            見つからない、またはエラーの場合はNone。
+        str | None: EDT (data) string of the found property.
+            None if not found or in case of an error.
     """
     if not response:
         return None
@@ -115,29 +115,29 @@ def parse_echonet_response(response, property_code):
     if not parsed_frame:
         return None
 
-    # 応答(Get_Res)か確認
+    # Verify it is a response (Get_Res)
     if parsed_frame['ESV'] != '72':
-        logger.warning(f"期待する応答(ESV=72)ではありませんでした: ESV={parsed_frame['ESV']}")
+        logger.warning(f"Not the expected response (ESV=72): ESV={parsed_frame['ESV']}")
         return None
 
-    # 要求したプロパティが含まれているか探す
+    # Check if the requested property is included
     for prop in parsed_frame['properties']:
         if prop['EPC'] == property_code.upper():
-            logger.debug(f"プロパティ {property_code} の値(EDT)が見つかりました: {prop['EDT']}")
+            logger.debug(f"Found value (EDT) for property {property_code}: {prop['EDT']}")
             return prop['EDT']
-    
-    logger.warning(f"応答内に要求したプロパティ {property_code} が見つかりませんでした。")
+
+    logger.warning(f"Requested property {property_code} not found in response.")
     return None
 
 def parse_cumulative_power(hex_value, multiplier=1.0):
-    """積算電力量の16進数値を指定された倍率を適用してkWh単位の浮動小数点数に変換します。
+    """Convert cumulative power hexadecimal value to kWh as floating point with the specified multiplier.
 
     Args:
-        hex_value (str): 積算電力量を示す16進数文字列。
-        multiplier (float, optional): 適用する倍率。Defaults to 1.0.
+        hex_value (str): Hexadecimal string representing cumulative power.
+        multiplier (float, optional): Multiplier to apply. Defaults to 1.0.
 
     Returns:
-        float | None: 変換後のkWh値。エラーの場合はNone。
+        float | None: Converted value in kWh. None in case of error.
     """
     if not hex_value:
         return None
@@ -150,7 +150,7 @@ def parse_cumulative_power(hex_value, multiplier=1.0):
             value = round(value, decimals)
         return value
     except (ValueError, TypeError):
-        logger.error(f"積算電力量の解析エラー: {hex_value}")
+        logger.error(f"Error parsing cumulative power: {hex_value}")
         return None
 
 POWER_UNITS = {
@@ -166,89 +166,89 @@ POWER_UNITS = {
 }
 
 def parse_power_unit(hex_value: str) -> float:
-    """積算電力量単位の16進数値を倍率(float)に変換します。
+    """Convert cumulative power unit hexadecimal value to multiplier (float).
 
     Args:
-        hex_value (str): 積算電力量単位を示す16進数文字列。
+        hex_value (str): Hexadecimal string representing the power unit.
 
     Returns:
-        float: 変換後の倍率。不明な場合は1.0を返す。
+        float: Converted multiplier. Returns 1.0 if unknown.
     """
     if not hex_value or hex_value.upper() not in POWER_UNITS:
-        logger.warning(f"不明な電力単位コードです: {hex_value}。デフォルトの倍率(1.0)を使用します。")
+        logger.warning(f"Unknown power unit code: {hex_value}. Using default multiplier (1.0).")
         return 1.0
     return POWER_UNITS[hex_value.upper()]
 
 def get_current_timestamp():
-    """現在の時刻をUTC基準のISO 8601形式タイムスタンプ文字列として取得します。
+    """Get the current time as an ISO 8601 formatted timestamp string based on UTC.
 
     Returns:
-        str: UTC基準のISO 8601形式のタイムスタンプ文字列。
+        str: ISO 8601 formatted timestamp string based on UTC.
     """
     return datetime.now(timezone.utc).isoformat()
 
 def _parse_signed_hex(hex_str: str) -> int:
-    """2の補数表現の16進数文字列を符号付き整数に変換します。
-    
+    """Convert a two's complement hexadecimal string to a signed integer.
+
     Args:
-        hex_str (str): 変換対象の16進数文字列。
-    
+        hex_str (str): Hexadecimal string to convert.
+
     Returns:
-        int: 変換後の符号付き整数。
+        int: Converted signed integer.
     """
     value = int(hex_str, 16)
     bits = len(hex_str) * 4
-    # 最上位ビットが1の場合（負数）
+    # If the most significant bit is 1 (negative number)
     if (value & (1 << (bits - 1))) != 0:
-        # 2の補数を計算して負数に変換
+        # Calculate two's complement and convert to negative
         value = value - (1 << bits)
     return value
 
 def parse_instant_power(hex_value):
-    """瞬時電力の16進数値をW単位の整数に変換します。
-    
-    4バイトの符号付き整数として解釈します。
+    """Convert instantaneous power hexadecimal value to integer in watts.
+
+    Interpreted as a 4-byte signed integer.
 
     Args:
-        hex_value (str): 瞬時電力を示す16進数文字列 (4バイト/8文字)。
+        hex_value (str): Hexadecimal string representing instantaneous power (4 bytes/8 characters).
 
     Returns:
-        int | None: 変換後のW値。エラーの場合はNone。
+        int | None: Converted value in watts. None in case of error.
     """
     if not hex_value or len(hex_value) != 8:
-        logger.warning(f"瞬時電力の値が不正です(4バイトではありません): {hex_value}")
+        logger.warning(f"Invalid instantaneous power value (not 4 bytes): {hex_value}")
         return None
     try:
-        # 4バイト符号付き整数として解釈
+        # Interpret as 4-byte signed integer
         value = _parse_signed_hex(hex_value)
         return value
     except (ValueError, TypeError):
-        logger.error(f"瞬時電力の解析エラー: {hex_value}")
+        logger.error(f"Error parsing instantaneous power: {hex_value}")
         return None
 
 def parse_current_value(hex_value):
-    """瞬時電流の16進数値をA単位の辞書に変換します。
+    """Convert instantaneous current hexadecimal value to a dictionary with values in amperes.
 
-    戻り値のフォーマットは常に統一されます。
-    - `current_a`: 代表電流(A)。単相時はR相の値、三相時はR相とT相の合計値。
-    - `current_r_a`: R相電流(A)。
-    - `current_t_a`: T相電流(A)。単相時はNone。
+    The return format is always consistent:
+    - `current_a`: Representative current (A). For single-phase, it's the R-phase value; for three-phase, it's the sum of R and T phases.
+    - `current_r_a`: R-phase current (A).
+    - `current_t_a`: T-phase current (A). None for single-phase.
 
     Args:
-        hex_value (str): 瞬時電流を示す16進数文字列。
+        hex_value (str): Hexadecimal string representing instantaneous current.
 
     Returns:
-        dict | None: 変換後の電流値を含む辞書。エラーの場合はNone。
+        dict | None: Dictionary containing converted current values. None in case of error.
     """
     if not hex_value:
         return None
     try:
-        # 三相3線式 or 単相2線式 (4バイト = 8文字)
+        # Three-phase 3-wire or single-phase 2-wire (4 bytes = 8 characters)
         if len(hex_value) == 8:
             r_phase_hex = hex_value[0:4]
             t_phase_hex = hex_value[4:8]
 
-            # T相が 0x7FFE (未定義) の場合は単相2線式として扱う
+            # If T-phase is 0x7FFE (undefined), treat as single-phase 2-wire
             if t_phase_hex.upper() == '7FFE':
                 current_r = _parse_signed_hex(r_phase_hex) / 10.0
                 return {
@@ -257,7 +257,7 @@ def parse_current_value(hex_value):
                     'current_t_a': None
                 }
             else:
-                # 通常の三相3線式
+                # Normal three-phase 3-wire
                 current_r = _parse_signed_hex(r_phase_hex) / 10.0
                 current_t = _parse_signed_hex(t_phase_hex) / 10.0
                 return {
@@ -265,8 +265,8 @@ def parse_current_value(hex_value):
                     'current_r_a': round(current_r, 1),
                     'current_t_a': round(current_t, 1)
                 }
-        
-        # (下位互換性のため残すが、通常は4バイトで送られる想定)
+
+        # (Kept for backward compatibility, but normally expected to be sent as 4 bytes)
         elif len(hex_value) == 4:
             current_r = _parse_signed_hex(hex_value) / 10.0
             return {
@@ -274,29 +274,29 @@ def parse_current_value(hex_value):
                 'current_r_a': round(current_r, 1),
                 'current_t_a': None
             }
-        
+
         else:
-            logger.warning(f"瞬時電流のデータ長が想定外です (長さ: {len(hex_value)}): {hex_value}")
+            logger.warning(f"Unexpected instantaneous current data length (length: {len(hex_value)}): {hex_value}")
             return None
             
     except (ValueError, TypeError):
-        logger.error(f"瞬時電流の解析エラー: {hex_value}")
+        logger.error(f"Error parsing instantaneous current: {hex_value}")
         return None
 
 def parse_historical_power(hex_value, multiplier=1.0):
-    """定時積算電力量(EA)の16進数値を辞書に変換します。
+    """Convert regular cumulative power (EA) hexadecimal value to a dictionary.
 
     Args:
-        hex_value (str): 定時積算電力量を示す16進数文字列(11バイト/22文字)。
-        multiplier (float, optional): 積算電力量に適用する倍率。Defaults to 1.0.
+        hex_value (str): Hexadecimal string representing regular cumulative power (11 bytes/22 characters).
+        multiplier (float, optional): Multiplier to apply to the power value. Defaults to 1.0.
 
     Returns:
-        dict | None: 変換後のデータを含む辞書。
+        dict | None: Dictionary containing converted data.
             {'historical_timestamp': str, 'historical_cumulative_power_kwh': float}
-            エラーの場合はNone。
+            None in case of error.
     """
     if not hex_value or len(hex_value) != 22:
-        logger.warning(f"定時積算電力量データ長が不正です(11バイトではありません): {hex_value}")
+        logger.warning(f"Invalid regular cumulative power data length (not 11 bytes): {hex_value}")
         return None
     try:
         year = int(hex_value[0:4], 16)
@@ -309,24 +309,24 @@ def parse_historical_power(hex_value, multiplier=1.0):
         power_value_hex = hex_value[14:22]
 
         try:
-            # タイムゾーン情報のないdatetimeオブジェクトを作成
+            # Create datetime object without timezone information
             naive_dt = datetime(year, month, day, hour, minute, second)
-            
-            # 設定されたタイムゾーン情報を付与
+
+            # Add configured timezone information
             tz = get_timezone()
             local_dt = naive_dt.replace(tzinfo=tz)
-            
-            # UTCに変換してISOフォーマット文字列を生成
+
+            # Convert to UTC and generate ISO format string
             historical_timestamp = local_dt.astimezone(timezone.utc).isoformat()
         except Exception as e:
-            logger.error(f"タイムスタンプのタイムゾーン変換中にエラーが発生しました: {e}")
-            # エラーが発生した場合は、タイムゾーン情報なしのタイムスタンプを使用する
+            logger.error(f"Error occurred during timestamp timezone conversion: {e}")
+            # If an error occurs, use timestamp without timezone information
             historical_timestamp = datetime(year, month, day, hour, minute, second).isoformat()
 
-        # 積算電力量を計算
+        # Calculate cumulative power
         historical_power_kwh = int(power_value_hex, 16) * multiplier
-        
-        # 桁丸め
+
+        # Round digits
         if multiplier < 1:
             decimals = -int(math.log10(multiplier))
             historical_power_kwh = round(historical_power_kwh, decimals)
@@ -337,57 +337,57 @@ def parse_historical_power(hex_value, multiplier=1.0):
         }
         
     except (ValueError, TypeError) as e:
-        logger.error(f"定時積算電力量の解析エラー: {e}, データ: {hex_value}")
+        logger.error(f"Error parsing regular cumulative power: {e}, Data: {hex_value}")
         return None
 
 def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0):
     """
-    積算電力量計測値履歴1 (EDT: 0xE2) を解析し、直近30分間の消費電力量を計算する。
-    本日分のデータで計算できない場合、昨日分のデータを考慮する。
+    Analyze cumulative power measurement history 1 (EDT: 0xE2) and calculate power consumption over the last 30 minutes.
+    If calculation is not possible with today's data, consider yesterday's data.
 
     Args:
-        today_edt (str): 本日(00)の0xE2応答データ。
-        yesterday_edt (str, optional): 昨日(01)の0xE2応答データ。Defaults to None.
-        multiplier (float): 積算電力量に適用する単位倍率。
+        today_edt (str): Today's (00) 0xE2 response data.
+        yesterday_edt (str, optional): Yesterday's (01) 0xE2 response data. Defaults to None.
+        multiplier (float): Unit multiplier to apply to cumulative power.
 
     Returns:
-        dict | None: 計算結果を含む辞書、または計算不可の場合None。
+        dict | None: Dictionary containing calculation results, or None if calculation is not possible.
     """
     def _extract_readings(edt):
-        """E2のEDTから48コマの積算値リストを抽出する内部関数"""
+        """Internal function to extract a list of 48 cumulative values from the EDT of E2"""
         if not edt or len(edt) < 388:
-            logger.warning(f"積算電力量履歴(E2)のデータ長が不正です: {len(edt) if edt else 0}文字")
+            logger.warning(f"Invalid cumulative power history (E2) data length: {len(edt) if edt else 0} characters")
             return []
-        
-        # 最初の2バイト(4文字)は収集日なのでスキップ
+
+        # Skip the first 2 bytes (4 characters) which represent collection date
         values_hex = edt[4:]
         readings = []
-        logger.debug("--- 積算電力量履歴(E2) データ解析開始 ---")
+        logger.debug("--- Cumulative power history (E2) data analysis start ---")
         for i in range(48):
             val_hex = values_hex[i*8 : (i+1)*8].upper()
-            
+
             hour = (i * 30) // 60
             minute = (i * 30) % 60
-            
+
             if val_hex == 'FFFFFFFE':
                 readings.append(None)
-                logger.debug(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈=データなし(None)")
+                logger.debug(f"  Slot {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> Interpretation=No data(None)")
             else:
                 try:
                     val_int = int(val_hex, 16)
                     readings.append(val_int)
-                    logger.debug(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈={val_int}")
+                    logger.debug(f"  Slot {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> Interpretation={val_int}")
                 except (ValueError, TypeError):
                     readings.append(None)
-                    logger.warning(f"  コマ {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> 解釈エラー(None)")
+                    logger.warning(f"  Slot {i:02d} ({hour:02d}:{minute:02d}): RAW={val_hex} -> Interpretation error(None)")
 
-        logger.debug("--- 積算電力量履歴(E2) データ解析終了 ---")
+        logger.debug("--- Cumulative power history (E2) data analysis end ---")
         return readings
 
     try:
         today_readings = _extract_readings(today_edt)
         
-        # 昨日データが提供されているかどうかのフラグ
+        # Flag to indicate whether yesterday's data is provided
         is_yesterday_data_present = yesterday_edt is not None and len(yesterday_edt) >= 388
 
         if is_yesterday_data_present:
@@ -410,9 +410,9 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
                     previous_value = combined_readings[i]
                     previous_idx_abs = i
                     break
-        
+
         if latest_value is None or previous_value is None:
-            logger.info("30分消費電力の計算に必要なデータポイントが不足しています（有効な履歴が2つ未満）")
+            logger.info("Insufficient data points for 30-minute power consumption calculation (less than 2 valid history entries)")
             return None
 
         consumption_kwh = (latest_value - previous_value) * multiplier
@@ -441,19 +441,19 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
         latest_ts = _get_timestamp_from_index(latest_idx_abs, is_yesterday_data_present)
         previous_ts = _get_timestamp_from_index(previous_idx_abs, is_yesterday_data_present)
         
-        logger.debug("--- 30分消費電力計算 ---")
-        logger.debug(f"  最新値 (時刻: {latest_ts}): {latest_value} (raw)")
-        logger.debug(f"  前回値 (時刻: {previous_ts}): {previous_value} (raw)")
-        logger.debug(f"  乗数: {multiplier}")
-        logger.debug(f"  計算結果: {consumption_kwh} kWh")
+        logger.debug("--- 30-minute power consumption calculation ---")
+        logger.debug(f"  Latest value (time: {latest_ts}): {latest_value} (raw)")
+        logger.debug(f"  Previous value (time: {previous_ts}): {previous_value} (raw)")
+        logger.debug(f"  Multiplier: {multiplier}")
+        logger.debug(f"  Calculation result: {consumption_kwh} kWh")
 
-        # is_today の判定ロジックを修正
+        # Modify the is_today determination logic
         if is_yesterday_data_present:
             is_today = latest_idx_abs >= 48
         else:
-            is_today = True # 昨日データがないなら、見つかったインデックスは必ず今日のもの
+            is_today = True # If there's no yesterday's data, the found index must be today's
 
-        # 相対インデックスの計算
+        # Calculate relative index
         if is_yesterday_data_present and is_today:
             latest_idx_rel = latest_idx_abs - 48
         else:
@@ -478,5 +478,5 @@ def parse_cumulative_power_history(today_edt, yesterday_edt=None, multiplier=1.0
             'recent_30min_timestamp': timestamp_str
         }
     except (ValueError, TypeError, IndexError) as e:
-        logger.error(f"積算電力量履歴(E2)の解析エラー: {e}")
+        logger.error(f"Error parsing cumulative power history (E2): {e}")
         return None

@@ -1,65 +1,80 @@
 # src/config.py
-"""アプリケーション全体で使用する設定値。
+"""Configuration values used throughout the application.
 
-このモジュールは、シリアル通信、Bルート認証情報、データ出力先、
-ECHONET Lite関連の定数など、アプリケーション全体で共有される設定値を定義します。
+This module defines configuration values shared across the application,
+including serial communication, B-route authentication information,
+data output destinations, and ECHONET Lite related constants.
 
-環境変数から設定を読み込み、環境変数が存在しない場合は
-定義済みのデフォルト値を使用します。
+Settings are loaded from environment variables, with predefined
+default values used when environment variables are not present.
 """
 import os
 import logging
 from dotenv import load_dotenv
 
-# .envファイルから環境変数を読み込む
+# Load environment variables from .env file
 load_dotenv()
 
-# ロギング設定
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# アプリケーションのバージョン
-VERSION = "0.1.0"
+# Application version
+try:
+    # When package is installed
+    from importlib.metadata import version
+    try:
+        VERSION = version("hems-data-collector")
+    except:
+        # In development environment, try to get directly from scm
+        try:
+            from setuptools_scm import get_version
+            VERSION = get_version(root='..', relative_to=__file__)
+        except Exception as e:
+            logger.debug(f"Could not get version from setuptools_scm: {e}")
+            VERSION = "development"  # Final fallback
+except ImportError:
+    VERSION = "development"  # Fallback
 
-# シリアル通信設定
-SERIAL_PORT = os.environ.get('SERIAL_PORT', '/dev/ttyUSB0')  # USBトングルのシリアルポート（環境に合わせて変更）
-SERIAL_RATE = int(os.environ.get('SERIAL_RATE', 115200))          # ボーレート
+# Serial communication settings
+SERIAL_PORT = os.environ.get('SERIAL_PORT', '/dev/ttyUSB0')  # USB dongle serial port (adjust for your environment)
+SERIAL_RATE = int(os.environ.get('SERIAL_RATE', 115200))          # Baud rate
 
-# Bルート認証情報（電力会社から提供される）
-B_ROUTE_ID = os.environ.get('B_ROUTE_ID', "00000000000000000000000000000000")  # 認証ID
-B_ROUTE_PASSWORD = os.environ.get('B_ROUTE_PASSWORD', "00000000000000000000000000000000")  # パスワード
+# B-route authentication information (provided by power company)
+B_ROUTE_ID = os.environ.get('B_ROUTE_ID', "00000000000000000000000000000000")  # Authentication ID
+B_ROUTE_PASSWORD = os.environ.get('B_ROUTE_PASSWORD', "00000000000000000000000000000000")  # Password
 
-# データファイル
+# Data file
 DEFAULT_DATA_FILE = "hems_data.dat"
 
-# Google Cloud Pub/Sub設定
-GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', "your-project-id")  # Google Cloudプロジェクト
+# Google Cloud Pub/Sub settings
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', "your-project-id")  # Google Cloud project
 GCP_TOPIC_NAME = os.getenv('GCP_TOPIC_NAME', 'hems-data')
 
-# デフォルトの実行スケジュール（5分ごと）
+# Default execution schedule (every 5 minutes)
 DEFAULT_SCHEDULE = '*/5 * * * *' 
-# デフォルトの実行間隔（秒）
+# Default execution interval (seconds)
 DEFAULT_INTERVAL = 300
-# デフォルトのWebhook URL
-DEFAULT_WEBHOOK_URL = "http://localhost:8000/webhook"
-# デフォルトのタイムゾーン
+# Default Webhook URL
+DEFAULT_WEBHOOK_URL = os.environ.get('WEBHOOK_URL', "http://localhost:8000/webhook")
+# Default timezone
 LOCAL_TIMEZONE = os.environ.get('LOCAL_TIMEZONE', "Asia/Tokyo")
 
-# ECHONET Lite関連の定数
+# ECHONET Lite related constants
 ECHONET_PROPERTY_CODES = {
-    'CUMULATIVE_POWER': "E0",  # 積算電力量計測値
-    'CUMULATIVE_POWER_UNIT': "E1", # 積算電力量単位
-    'HISTORICAL_CUMULATIVE_POWER': "EA", # 定時積算電力量計測値
-    'CUMULATIVE_POWER_HISTORY_1': "E2", # 積算電力量計測値履歴1
-    'SET_CUMULATIVE_HISTORY_DAY': "E5",  # 積算履歴収集日1
-    'INSTANT_POWER': "E7",     # 瞬時電力計測値
-    'CURRENT_VALUE': "E8",     # 瞬時電流計測値
+    'CUMULATIVE_POWER': "E0",  # Cumulative power consumption
+    'CUMULATIVE_POWER_UNIT': "E1", # Cumulative power unit
+    'HISTORICAL_CUMULATIVE_POWER': "EA", # Regular cumulative power measurement
+    'CUMULATIVE_POWER_HISTORY_1': "E2", # Cumulative power measurement history 1
+    'SET_CUMULATIVE_HISTORY_DAY': "E5",  # Cumulative history collection day 1
+    'INSTANT_POWER': "E7",     # Instantaneous power measurement
+    'CURRENT_VALUE': "E8",     # Instantaneous current measurement
 }
 
-# CSV出力用ヘッダー
+# CSV output headers
 CSV_HEADERS = [
     'timestamp', 
     'cumulative_power_kwh', 

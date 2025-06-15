@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools-scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hems-data-collector"
+description = "A tool for collecting data from smart meters (HEMS)"
+readme = "README.md"
+authors = [
+    {name = "Hiroki Kato", email = "hiroki.kato@colorfulclover.net"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pyserial>=3.5",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.1.0",
+    "croniter>=6.0.0",
+    "requests>=2.32.0",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/colorfulclover/cc-hems-data-collector"
+
+[project.optional-dependencies]
+gcloud = ["google-cloud-pubsub>=2.13.0"]
+
+[project.scripts]
+hems-data-collector = "hems_data_collector.main:main"
+
+[tool.setuptools_scm]
+# Automatically generate version from Git tags
+# Uncomment and adjust the following lines to customize version format
+# version_scheme = "post-release"
+# local_scheme = "node-and-date"
