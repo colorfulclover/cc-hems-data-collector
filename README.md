@@ -1,8 +1,8 @@
+[日本語（Japanese）](README_JP.md)
+
 # HEMS Data Collector
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
-
-[日本語版ドキュメントを読む（Read Japanese version）](README_JP.md)
 
 `hems-data-collector` is a Python tool for collecting power consumption data from smart meters via the B-route and transmitting it to various destinations. It is designed to run stably as a background service on Linux systems like Raspberry Pi.
 

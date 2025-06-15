@@ -1,8 +1,8 @@
+[English (英語)](README.md)
+
 # HEMS Data Collector
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
-
-[Read English version (英語版ドキュメントを読む)](README.md)
 
 `hems-data-collector`は、スマートメーターからBルート経由で電力消費データを収集し、様々な宛先に送信するためのPython製ツールです。Linuxシステム上で、バックグラウンドサービスとして安定稼働するように設計されています。
 

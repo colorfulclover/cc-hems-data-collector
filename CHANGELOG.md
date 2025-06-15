@@ -1,3 +1,5 @@
+[日本語（Japanese）](CHANGELOG_JP.md)
+
 # Changelog
 All notable changes to this project will be documented in this file.
 
