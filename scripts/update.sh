@@ -39,7 +39,7 @@ update_service() {
     update_settings
     if [ $? -eq 0 ]; then
       # サービスファイル再生成
-      generate_service_file "$UPDATED_OUTPUT_TYPE"
+      generate_service_file "$UPDATED_OUTPUT_TYPE" "$UPDATED_FILE_FORMAT"
     fi
   else
     # Load current settings

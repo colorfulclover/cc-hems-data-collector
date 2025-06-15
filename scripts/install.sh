@@ -53,20 +53,16 @@ install_service() {
   fi
 
   # Create environment variable settings file
-  if [ ! -f "${INSTALL_DIR}/.env" ]; then
-    echo "Creating environment variable settings file..."
+  echo "Configuring environment settings..."
 
-    # Collect settings
-    collect_settings
+  # Collect settings
+  collect_settings
 
-    # Create environment variables file
-    create_env_file "$SETTINGS_SERIAL_PORT" "$SETTINGS_SERIAL_RATE" "$SETTINGS_B_ROUTE_ID" \
-                   "$SETTINGS_B_ROUTE_PASSWORD" "$SETTINGS_OUTPUT_CHOICE" "$SETTINGS_WEBHOOK_URL" \
-                   "$SETTINGS_GCP_PROJECT_ID" "$SETTINGS_GCP_TOPIC_NAME" "$SETTINGS_TIMEZONE"
-  fi
-
-  # Generate service file
-  generate_service_file
+  # Create environment variables file
+  create_env_file "$SETTINGS_SERIAL_PORT" "$SETTINGS_SERIAL_RATE" "$SETTINGS_B_ROUTE_ID" \
+                 "$SETTINGS_B_ROUTE_PASSWORD" "$SETTINGS_OUTPUT_CHOICE" "$SETTINGS_WEBHOOK_URL" \
+                 "$SETTINGS_GCP_PROJECT_ID" "$SETTINGS_GCP_TOPIC_NAME" "$SETTINGS_TIMEZONE" \
+                 "$SETTINGS_FILE_FORMAT"
 
   # Reload systemd
   systemctl daemon-reload

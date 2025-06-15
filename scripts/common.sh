@@ -23,6 +23,7 @@ initialize() {
 generate_service_file() {
   # Receive command arguments from parameters
   local output_type="$1"
+  local file_format="$2"
   local command_args=""
 
   # Set command arguments according to output type
@@ -33,10 +34,10 @@ generate_service_file() {
     "gcloud")
       command_args="--output gcloud"
       ;;
-    *)
-      # Default is file output
-      output_type="file"
-      command_args="--output file --format csv --file /var/log/hems/data.csv"
+    "file"|*) # Default to file output
+      local format=${file_format:-csv}
+      local log_file="/var/log/hems/data.${format}"
+      command_args="--output file --format ${format} --file ${log_file}"
       ;;
   esac
 
@@ -62,6 +63,9 @@ EOF
 
   chmod 644 "${SERVICE_FILE}"
   echo "Generated service file based on configuration at ${SERVICE_FILE}"
+
+  UPDATED_OUTPUT_TYPE="${output_type}"
+  UPDATED_FILE_FORMAT="${file_format}"
 }
 
 # Create environment variable file
@@ -75,6 +79,7 @@ create_env_file() {
   local gcp_project_id="$7"
   local gcp_topic_name="$8"
   local timezone="$9"
+  local file_format="${10}"
 
   # Convert output type to string
   local output_type="file"
@@ -98,10 +103,15 @@ B_ROUTE_PASSWORD=${b_route_password}
 LOCAL_TIMEZONE=${timezone}
 EOF
 
-
-
   # Add settings according to the selected output type
   case $output_choice in
+    1)
+      cat >> "${INSTALL_DIR}/.env" << EOF
+
+# File output settings
+FILE_FORMAT=${file_format}
+EOF
+      ;;
     2)
       cat >> "${INSTALL_DIR}/.env" << EOF
 
@@ -124,7 +134,7 @@ EOF
   echo "Created environment variable configuration file at ${INSTALL_DIR}/.env"
 
   # サービスファイルを生成
-  generate_service_file "$output_type"
+  generate_service_file "$output_type" "$file_format"
 }
 
 # User interaction - collect settings
@@ -161,11 +171,14 @@ collect_settings() {
   webhook_url=""
   gcp_project_id=""
   gcp_topic_name=""
+  file_format="csv"
 
   # Additional settings according to the selected output type
   case $output_choice in
     1)
       echo "File output selected."
+      read -p "Select file format (csv/json) [csv]: " file_format_input
+      file_format=${file_format_input:-csv}
       ;;
     2)
       echo "Webhook output selected."
@@ -206,15 +219,12 @@ collect_settings() {
   SETTINGS_GCP_PROJECT_ID="${gcp_project_id}"
   SETTINGS_GCP_TOPIC_NAME="${gcp_topic_name}"
   SETTINGS_TIMEZONE="${timezone}"
+  SETTINGS_FILE_FORMAT="${file_format}"
 }
 
 # Update settings
 update_settings() {
-  # 現在の設定を読み込む
-  source "${INSTALL_DIR}/.env"
-
-  # Output type selection
-  echo -e "\nPlease select the data output destination:"
+  echo -e "\nPlease select the new data output destination:"
   echo "1) File output"
   echo "2) Webhook"
   echo "3) Google Cloud Pub/Sub"
@@ -224,74 +234,69 @@ update_settings() {
 
   # Additional settings according to the selected output type
   local output_type
+  local file_format
+
+  # Clear old output-specific settings from .env file
+  if [ -f "${INSTALL_DIR}/.env" ]; then
+    sed -i -e '/^WEBHOOK_URL=/d' \
+           -e '/^GCP_PROJECT_ID=/d' \
+           -e '/^GCP_TOPIC_NAME=/d' \
+           -e '/^FILE_FORMAT=/d' \
+           "${INSTALL_DIR}/.env"
+  fi
+
   case $output_choice in
     1)
       echo "File output selected."
       output_type="file"
 
-      # Update environment variables
-      sed -i '/WEBHOOK_URL=/d' "${INSTALL_DIR}/.env"
-      sed -i '/GCP_PROJECT_ID=/d' "${INSTALL_DIR}/.env"
-      sed -i '/GCP_TOPIC_NAME=/d' "${INSTALL_DIR}/.env"
+      read -p "Select file format (csv/json) [csv]: " file_format_input
+      file_format=${file_format_input:-csv}
+      
+      echo "FILE_FORMAT=${file_format}" >> "${INSTALL_DIR}/.env"
       ;;
     2)
       echo "Webhook output selected."
       output_type="webhook"
-      read -p "Webhook URL [${WEBHOOK_URL:-}]: " webhook_url
-      webhook_url=${webhook_url:-${WEBHOOK_URL:-}}
-      sed -i "s|^WEBHOOK_URL=.*|WEBHOOK_URL=${webhook_url}|" "${INSTALL_DIR}/.env"
+      file_format=""
 
-      # Update environment variables
-      sed -i '/GCP_PROJECT_ID=/d' "${INSTALL_DIR}/.env"
-      sed -i '/GCP_TOPIC_NAME=/d' "${INSTALL_DIR}/.env"
+      read -p "New Webhook URL: " webhook_url
+      while [ -z "$webhook_url" ]; do
+        echo "Webhook URL is required."
+        read -p "New Webhook URL: " webhook_url
+      done
+      echo "WEBHOOK_URL=${webhook_url}" >> "${INSTALL_DIR}/.env"
       ;;
     3)
       echo "Google Cloud Pub/Sub output selected."
       output_type="gcloud"
-      read -p "GCP Project ID [${GCP_PROJECT_ID:-}]: " gcp_project_id
-      gcp_project_id=${gcp_project_id:-${GCP_PROJECT_ID:-}}
-      sed -i "s|^GCP_PROJECT_ID=.*|GCP_PROJECT_ID=${gcp_project_id}|" "${INSTALL_DIR}/.env"
+      file_format=""
 
-      read -p "Pub/Sub topic name [${GCP_TOPIC_NAME:-hems-data}]: " gcp_topic_name
-      gcp_topic_name=${gcp_topic_name:-${GCP_TOPIC_NAME:-hems-data}}
-      sed -i "s|^GCP_TOPIC_NAME=.*|GCP_TOPIC_NAME=${gcp_topic_name}|" "${INSTALL_DIR}/.env"
+      read -p "New GCP Project ID: " gcp_project_id
+      while [ -z "$gcp_project_id" ]; do
+        echo "GCP Project ID is required."
+        read -p "New GCP Project ID: " gcp_project_id
+      done
 
-      # Update environment variables
-      sed -i '/WEBHOOK_URL=/d' "${INSTALL_DIR}/.env"
+      read -p "New Pub/Sub topic name: " gcp_topic_name
+      while [ -z "$gcp_topic_name" ]; do
+        echo "Pub/Sub topic name is required."
+        read -p "New Pub/Sub topic name: " gcp_topic_name
+      done
+      
+      echo "GCP_PROJECT_ID=${gcp_project_id}" >> "${INSTALL_DIR}/.env"
+      echo "GCP_TOPIC_NAME=${gcp_topic_name}" >> "${INSTALL_DIR}/.env"
       ;;
     *)
-      echo "Invalid selection. Using default file output."
+      echo "Invalid selection. Defaulting to file output."
       output_type="file"
+      file_format="csv"
+      echo "FILE_FORMAT=csv" >> "${INSTALL_DIR}/.env"
       ;;
   esac
 
   UPDATED_OUTPUT_TYPE="${output_type}"
-}
-
-# Load settings from environment variables
-load_settings_from_env() {
-  # Return error if environment variable file doesn't exist
-  if [ ! -f "${INSTALL_DIR}/.env" ]; then
-    return 1
-  fi
-
-  # Load current settings
-  source "${INSTALL_DIR}/.env"
-
-  # Determine output type and command arguments
-  local output_type="file"  # Default is file output
-  local command_args="--output file --format csv --file /var/log/hems/data.csv"
-
-  if [ -n "${WEBHOOK_URL}" ]; then
-    output_type="webhook"  # Webhook output
-    command_args="--output webhook"
-  elif [ -n "${GCP_PROJECT_ID}" ] && [ -n "${GCP_TOPIC_NAME}" ]; then
-    output_type="gcloud"  # Google Cloud Pub/Sub output
-    command_args="--output gcloud"
-  fi
-
-  # 設定値を返す
-  echo "${output_type},${WEBHOOK_URL:-},${GCP_PROJECT_ID:-},${GCP_TOPIC_NAME:-},${command_args}"
+  UPDATED_FILE_FORMAT="${file_format}"
 }
 
 # Display service information
