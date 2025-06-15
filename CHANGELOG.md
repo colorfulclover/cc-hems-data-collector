@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.1] - 2025-06-15
+
+### Changed
+- **Update Script**: Removed the logic for reading current settings from the `update.sh` script to simplify the code and improve maintainability.
+- **Documentation**: Updated the `README.md` to generalize the description of the operating system, emphasizing stable operation on Linux systems.
+
 ## [v0.2.0] - 2025-06-15
 
 ### Added
